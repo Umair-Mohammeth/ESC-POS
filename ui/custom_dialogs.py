@@ -747,6 +747,10 @@ class AddStockDialog(ModernDialog):
         
     def cancel(self):
         """Cancel and close dialog"""
+        self.result = None
+        self.destroy()
+
+
 class BrowseProductsDialog(ModernDialog):
     """Modern dialog for browsing and selecting products"""
     
@@ -882,4 +886,97 @@ class InvoiceDialog(ModernDialog):
 
     def print_simulated(self):
         messagebox.showinfo("Printer Status", "ESC/POS Command sent to thermal printer!")
+        self.destroy()
+
+
+class ManualEntryDialog(ModernDialog):
+    """Modern dialog for manual item entry"""
+
+    def __init__(self, parent):
+        super().__init__(parent, "Manual Entry", width=500, height=450)
+        self.init_ui()
+
+    def init_ui(self):
+        # Main container card
+        main_card = create_card_frame(
+            self,
+            fg_color=THEME_COLORS["background_light"],
+            corner_radius=RADIUS["lg"]
+        )
+        main_card.pack(fill="both", expand=True, padx=20, pady=20)
+
+        # Header
+        header = ctk.CTkFrame(main_card, fg_color="transparent")
+        header.pack(fill="x", padx=20, pady=(20, 10))
+
+        ctk.CTkLabel(
+            header,
+            text=f"{ICONS['settings']} Manual Entry",
+            font=(FONTS["primary"], 20, "bold"),
+            text_color=THEME_COLORS["text"]
+        ).pack(side="left")
+
+        # Form
+        form = ctk.CTkFrame(main_card, fg_color="transparent")
+        form.pack(fill="both", expand=True, padx=20, pady=10)
+
+        ctk.CTkLabel(form, text="Item Name *", font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w", pady=(0, 5))
+        self.name_entry = ctk.CTkEntry(form, height=45, fg_color=THEME_COLORS["surface"])
+        self.name_entry.pack(fill="x", pady=(0, 15))
+        self.name_entry.insert(0, "Miscellaneous")
+
+        ctk.CTkLabel(form, text="Price ($) *", font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w", pady=(0, 5))
+        self.price_entry = ctk.CTkEntry(form, height=45, fg_color=THEME_COLORS["surface"])
+        self.price_entry.pack(fill="x", pady=(0, 20))
+
+        # Buttons
+        btn_frame = ctk.CTkFrame(main_card, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=(10, 20))
+
+        ctk.CTkButton(
+            btn_frame,
+            text="Cancel",
+            width=120, height=45,
+            fg_color=THEME_COLORS["surface"],
+            command=self.destroy
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame,
+            text="Add to Cart",
+            width=150, height=45,
+            fg_color=THEME_COLORS["success"],
+            hover_color=THEME_COLORS["success_hover"],
+            font=(FONTS["primary"], 15, "bold"),
+            command=self.submit
+        ).pack(side="right", fill="x", expand=True)
+
+        self.price_entry.focus()
+        self.price_entry.bind("<Return>", lambda e: self.submit())
+        self.name_entry.bind("<Return>", lambda e: self.submit())
+
+    def submit(self):
+        name = self.name_entry.get().strip()
+        price_str = self.price_entry.get().strip()
+
+        if not name:
+            messagebox.showerror("Validation Error", "Item name is required!")
+            self.name_entry.focus()
+            return
+
+        try:
+            price = float(price_str)
+            if price < 0: raise ValueError()
+        except:
+            messagebox.showerror("Validation Error", "Please enter a valid price!")
+            self.price_entry.focus()
+            return
+
+        self.result = {
+            "id": 0, # Virtual ID for manual entry
+            "name": name,
+            "price": price,
+            "stock_quantity": 999999, # Unlimited for manual entry
+            "category": "Manual"
+        }
         self.destroy()

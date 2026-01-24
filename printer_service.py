@@ -22,14 +22,15 @@ class PrinterService:
         receipt.append("-" * width)
         
         # Items Header
-        receipt.append("ITEM             QTY    PRICE")
+        receipt.append(f"{'ITEM':<12}{'QTY':>4}{'PRICE':>7}{'TOTAL':>9}")
         
         # Items List
         for item in items:
-            name = item['name'][:15].ljust(15)
+            name = item['name'][:12].ljust(12)
             qty = str(item['qty']).rjust(4)
-            price = f"{item['subtotal']:.2f}".rjust(9)
-            receipt.append(f"{name}{qty} {price}")
+            unit_price = f"{item['price']:.2f}".rjust(7)
+            line_total = f"{item['subtotal']:.2f}".rjust(9)
+            receipt.append(f"{name}{qty}{unit_price}{line_total}")
             
         receipt.append("-" * width)
         
