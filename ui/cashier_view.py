@@ -133,11 +133,12 @@ class CashierView(ctk.CTkFrame):
 
         ctk.CTkButton(
             btn_row,
-            text=f"{ICONS['star']} Favorites",
+            text=f"{ICONS['settings']} Custom Entry",
             font=(FONTS["primary"], 15),
             fg_color=THEME_COLORS["surface"],
             hover_color=THEME_COLORS["surface_light"],
-            width=140, height=45
+            width=140, height=45,
+            command=lambda: messagebox.showinfo("Manual Entry", "Manual price entry coming in next update!")
         ).pack(side="left")
 
         # 2. Shopping Cart Card
@@ -168,27 +169,31 @@ class CashierView(ctk.CTkFrame):
         summary_content = ctk.CTkFrame(summary_card, fg_color="transparent")
         summary_content.pack(fill="x", padx=20, pady=20)
         
+        # Items Count
+        self.count_label = ctk.CTkLabel(summary_content, text="0 Items Selected", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_muted"])
+        self.count_label.pack(anchor="w")
+
         # Subtotal
         sub_row = ctk.CTkFrame(summary_content, fg_color="transparent")
-        sub_row.pack(fill="x", pady=5)
-        ctk.CTkLabel(sub_row, text="Total Items Cost", font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(side="left")
+        sub_row.pack(fill="x", pady=(10, 5))
+        ctk.CTkLabel(sub_row, text="Order Subtotal", font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(side="left")
         self.subtotal_label = ctk.CTkLabel(sub_row, text="$0.00", font=(FONTS["primary"], 14, "bold"))
         self.subtotal_label.pack(side="right")
 
         # Discount Row
         disc_row = ctk.CTkFrame(summary_content, fg_color="transparent")
         disc_row.pack(fill="x", pady=5)
-        ctk.CTkLabel(disc_row, text="Discount Applied", font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(side="left")
+        ctk.CTkLabel(disc_row, text="Coupon Discount", font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(side="left")
         self.discount_label = ctk.CTkLabel(disc_row, text="-$0.00", font=(FONTS["primary"], 14, "bold"), text_color=THEME_COLORS["success"])
         self.discount_label.pack(side="right")
         
-        ctk.CTkFrame(summary_content, height=1, fg_color=THEME_COLORS["surface"]).pack(fill="x", pady=15)
+        ctk.CTkFrame(summary_content, height=2, fg_color=THEME_COLORS["surface"]).pack(fill="x", pady=15)
         
         # Grand Total
         total_row = ctk.CTkFrame(summary_content, fg_color="transparent")
         total_row.pack(fill="x")
-        ctk.CTkLabel(total_row, text="GRAND TOTAL", font=(FONTS["primary"], 16, "bold"), text_color=THEME_COLORS["text_secondary"]).pack(side="left")
-        self.total_label = ctk.CTkLabel(total_row, text="$0.00", font=(FONTS["primary"], 36, "bold"), text_color=THEME_COLORS["gradient_accent"])
+        ctk.CTkLabel(total_row, text="PAYABLE", font=(FONTS["primary"], 18, "bold")).pack(side="left")
+        self.total_label = ctk.CTkLabel(total_row, text="$0.00", font=(FONTS["primary"], 40, "bold"), text_color=THEME_COLORS["gradient_start"])
         self.total_label.pack(side="right")
 
         # Paid & Change (Add amount of item logic)
@@ -197,35 +202,35 @@ class CashierView(ctk.CTkFrame):
         paid_row = ctk.CTkFrame(summary_content, fg_color="transparent")
         paid_row.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(paid_row, text="Cash Received", font=(FONTS["primary"], 14)).pack(side="left")
-        self.paid_entry = ctk.CTkEntry(paid_row, width=100, font=(FONTS["primary"], 16, "bold"), justify="right", fg_color=THEME_COLORS["background"])
+        self.paid_entry = ctk.CTkEntry(paid_row, width=120, height=40, font=(FONTS["primary"], 18, "bold"), justify="right", fg_color=THEME_COLORS["background"], border_width=1)
         self.paid_entry.pack(side="right")
         self.paid_entry.bind("<KeyRelease>", lambda e: self.update_change_due())
         
         change_row = ctk.CTkFrame(summary_content, fg_color="transparent")
         change_row.pack(fill="x")
         ctk.CTkLabel(change_row, text="Change Due", font=(FONTS["primary"], 14)).pack(side="left")
-        self.change_label = ctk.CTkLabel(change_row, text="$0.00", font=(FONTS["primary"], 18, "bold"), text_color=THEME_COLORS["info"])
+        self.change_label = ctk.CTkLabel(change_row, text="$0.00", font=(FONTS["primary"], 22, "bold"), text_color=THEME_COLORS["info"])
         self.change_label.pack(side="right")
 
         # 2. Promo & Actions
         right_actions = ctk.CTkFrame(right_area, fg_color="transparent")
         right_actions.pack(fill="both", expand=True)
         
-        promo_card = create_card_frame(right_actions)
+        promo_card = create_card_frame(right_actions, fg_color=THEME_COLORS["surface"])
         promo_card.pack(fill="x", pady=(0, 20))
         
         promo_box = ctk.CTkFrame(promo_card, fg_color="transparent")
-        promo_box.pack(fill="x", padx=15, pady=15)
+        promo_box.pack(fill="x", padx=15, pady=10)
         
-        self.promo_entry = ctk.CTkEntry(promo_box, placeholder_text="Promo Code", font=(FONTS["primary"], 13), height=40, fg_color=THEME_COLORS["background"])
+        self.promo_entry = ctk.CTkEntry(promo_box, placeholder_text="Discount Code", font=(FONTS["primary"], 13), height=40, fg_color=THEME_COLORS["background"], border_width=0)
         self.promo_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         
-        ctk.CTkButton(promo_box, text="Apply", width=60, height=40, fg_color=THEME_COLORS["surface_light"], command=self.handle_discount).pack(side="right")
+        ctk.CTkButton(promo_box, text="Apply", width=70, height=40, fg_color=THEME_COLORS["info"], font=(FONTS["primary"], 12, "bold"), command=self.handle_discount).pack(side="right")
 
         # 3. Checkout Buttons
         self.pay_btn = ctk.CTkButton(
             right_actions,
-            text=f"{ICONS['money']} COMPLETE ORDER\n(Spacebar)",
+            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Spacebar)",
             height=100,
             font=(FONTS["primary"], 22, "bold"),
             fg_color=THEME_COLORS["success"],
@@ -237,19 +242,40 @@ class CashierView(ctk.CTkFrame):
 
         ctk.CTkButton(
             right_actions,
-            text=f"{ICONS['close']} VOID TRANSACTION",
+            text=f"{ICONS['close']} CANCEL",
             height=55,
-            font=(FONTS["primary"], 15, "bold"),
-            fg_color="#334155",
-            hover_color="#475569",
-            text_color="#ef4444",
-            border_width=1,
-            border_color="#ef4444",
+            font=(FONTS["primary"], 14, "bold"),
+            fg_color="#1e293b",
+            hover_color="#334155",
+            text_color="#f87171",
+            border_width=2,
+            border_color="#991b1b",
             command=self.clear_cart
         ).pack(fill="x")
 
         self.qty_multiply.focus_set()
         self.after(10, lambda: self.winfo_toplevel().bind("<space>", self.on_space_press))
+
+    def update_change_due(self):
+        """Calculate and display change based on cash received"""
+        try:
+            total_text = self.total_label.cget("text").replace("$", "")
+            grand_total = float(total_text)
+            paid_text = self.paid_entry.get().strip()
+            
+            if not paid_text:
+                self.change_label.configure(text="$0.00", text_color=THEME_COLORS["info"])
+                return
+                
+            paid_amount = float(paid_text)
+            change = paid_amount - grand_total
+            
+            if change < 0:
+                self.change_label.configure(text=f"-${abs(change):.2f}", text_color=THEME_COLORS["danger"])
+            else:
+                self.change_label.configure(text=f"${change:.2f}", text_color=THEME_COLORS["info"])
+        except ValueError:
+            self.change_label.configure(text="ERR", text_color=THEME_COLORS["danger"])
 
     def handle_discount(self):
         code = self.promo_entry.get().strip()
@@ -281,70 +307,70 @@ class CashierView(ctk.CTkFrame):
             self.add_to_cart(product)
 
     def on_space_press(self, event):
-        if self.cart and str(self.focus_get()) not in [str(self.search_bar), str(self.promo_entry)]:
+        # Trigger payment if cart is not empty and not typing in entry fields
+        focused = str(self.focus_get())
+        if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry), str(self.paid_entry)]:
             self.process_payment()
 
     def handle_search(self):
-        query = self.search_bar.get().strip()
-        if not query: return
-
-        from database import get_product_by_barcode, search_products
-        product = get_product_by_barcode(query)
-        if product:
-            self.add_to_cart(product)
-            self.search_bar.delete(0, 'end')
-        else:
-            results = search_products(query)
-            if len(results) == 1:
-                self.add_to_cart(results[0])
-                self.search_bar.delete(0, 'end')
-            elif len(results) > 1:
-                messagebox.showinfo("Multiple Results", f"Found {len(results)} matches. Try to be more specific or use the Browser tool.")
-            else:
-                messagebox.showwarning("Not Found", f"No products match '{query}'")
+        # Entry removed - this is a fallback or for barcode scan bypass if needed
+        pass
 
     def add_to_cart(self, product):
         if product['stock_quantity'] <= 0:
             messagebox.showwarning("Stock Alert", f"Cannot add {product['name']} - Out of stock!")
             return
 
+        # Get multiplier
+        try:
+            multiplier = int(self.qty_multiply.get().strip() or "1")
+            if multiplier <= 0: multiplier = 1
+        except:
+            multiplier = 1
+
         for item in self.cart:
             if item['id'] == product['id']:
-                item['qty'] += 1
+                item['qty'] += multiplier
                 item['subtotal'] = item['qty'] * item['price']
                 self.update_cart_display()
+                self.qty_multiply.delete(0, 'end')
+                self.qty_multiply.insert(0, "1")
                 return
 
         self.cart.append({
             'id': product['id'],
             'name': product['name'],
             'price': product['price'],
-            'qty': 1,
-            'subtotal': product['price'],
+            'qty': multiplier,
+            'subtotal': product['price'] * multiplier,
             'category': product.get('category', 'General')
         })
         self.update_cart_display()
+        self.qty_multiply.delete(0, 'end')
+        self.qty_multiply.insert(0, "1")
 
     def update_cart_display(self):
         for widget in self.cart_frame.winfo_children():
             widget.destroy()
 
         if not self.cart:
-            ctk.CTkLabel(self.cart_frame, text="Scan items to begin transaction...", font=(FONTS["primary"], 16), text_color=THEME_COLORS["text_muted"]).pack(pady=60)
+            ctk.CTkLabel(self.cart_frame, text="Select items to begin transaction...", font=(FONTS["primary"], 16), text_color=THEME_COLORS["text_muted"]).pack(pady=60)
             self.subtotal_label.configure(text="$0.00")
             self.discount_label.configure(text="-$0.00")
             self.total_label.configure(text="$0.00")
+            self.cart_title.configure(text=f"{ICONS['cart']} Current Order (0 Items)")
+            self.count_label.configure(text="0 Items Selected")
             self.applied_discount = None
+            self.update_change_due()
             return
 
         subtotal = 0
+        total_items = 0
         for i, item in enumerate(self.cart):
+            total_items += item['qty']
             # Dynamic Cart Item
-            item_row = ctk.CTkFrame(self.cart_frame, fg_color="transparent")
-            item_row.pack(fill="x", pady=2, padx=5)
-            
-            card = ctk.CTkFrame(item_row, fg_color=THEME_COLORS["surface"], corner_radius=RADIUS["sm"])
-            card.pack(fill="x", pady=2)
+            card = ctk.CTkFrame(self.cart_frame, fg_color=THEME_COLORS["surface"], corner_radius=RADIUS["sm"])
+            card.pack(fill="x", pady=2, padx=5)
             
             content = ctk.CTkFrame(card, fg_color="transparent")
             content.pack(fill="x", padx=15, pady=10)
@@ -362,15 +388,18 @@ class CashierView(ctk.CTkFrame):
             ctk.CTkLabel(pricing, text=f"x{item['qty']}", font=(FONTS["primary"], 14, "bold"), width=40).pack(side="left", padx=10)
             ctk.CTkLabel(pricing, text=f"${item['subtotal']:.2f}", font=(FONTS["primary"], 16, "bold"), text_color=THEME_COLORS["gradient_accent"]).pack(side="left", padx=10)
             
-            remove_btn = ctk.CTkButton(
+            ctk.CTkButton(
                 pricing, text=ICONS['delete'], width=30, height=30, 
                 fg_color="transparent", hover_color=THEME_COLORS["danger_hover"], 
-                text_color=THEME_COLORS["text_muted"],
+                text_color="#9ca3af",
                 command=lambda x=i: self.remove_item(x)
-            )
-            remove_btn.pack(side="left")
+            ).pack(side="left")
             
             subtotal += item['subtotal']
+
+        # Update Headers
+        self.cart_title.configure(text=f"{ICONS['cart']} Current Order ({total_items} Items)")
+        self.count_label.configure(text=f"{total_items} Items Selected")
 
         # Calculation
         discount_amt = 0
@@ -385,6 +414,7 @@ class CashierView(ctk.CTkFrame):
         self.subtotal_label.configure(text=f"${subtotal:.2f}")
         self.discount_label.configure(text=f"-${discount_amt:.2f}")
         self.total_label.configure(text=f"${total:.2f}")
+        self.update_change_due()
 
     def remove_item(self, index):
         del self.cart[index]
@@ -396,6 +426,7 @@ class CashierView(ctk.CTkFrame):
             self.cart = []
             self.applied_discount = None
             self.promo_entry.delete(0, 'end')
+            self.paid_entry.delete(0, 'end')
             self.update_cart_display()
 
     def process_payment(self):
@@ -412,13 +443,41 @@ class CashierView(ctk.CTkFrame):
         
         total = max(0, subtotal - discount_amt)
         
-        from database import create_transaction
+        # Check if paid amount is sufficient
         try:
-            create_transaction(self.user['id'], self.cart, subtotal, discount_amt, total)
-            messagebox.showinfo("Success", f"Transaction Finalized!\nTotal Collected: ${total:.2f}")
+            paid = float(self.paid_entry.get().strip() or "0")
+            if paid < total:
+                messagebox.showwarning("Insufficient Funds", f"Customer needs to pay at least ${total:.2f}")
+                self.paid_entry.focus()
+                return
+        except:
+            messagebox.showwarning("Validation Error", "Please enter a valid amount in Cash Received.")
+            return
+
+        from database import create_transaction
+        from printer_service import PrinterService
+        from ui.custom_dialogs import InvoiceDialog
+        
+        try:
+            tid = create_transaction(self.user['id'], self.cart, subtotal, discount_amt, total)
+            
+            # Generate receipt
+            change_due = paid - total
+            receipt_text = PrinterService.generate_receipt_text(
+                self.user['name'], self.cart, subtotal, discount_amt, total, paid, change_due
+            )
+            
+            # Save to disk (Audit log)
+            PrinterService.print_to_file(receipt_text, tid)
+            
+            # Show receipt dialog
+            InvoiceDialog(self, receipt_text)
+            
+            # Clear for next customer
             self.cart = []
             self.applied_discount = None
             self.promo_entry.delete(0, 'end')
+            self.paid_entry.delete(0, 'end')
             self.update_cart_display()
         except Exception as e:
             messagebox.showerror("Export Error", f"Failed to save transaction: {e}")

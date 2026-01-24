@@ -47,7 +47,7 @@ class AddProductDialog(ModernDialog):
     """Modern dialog for adding a new product"""
     
     def __init__(self, parent):
-        super().__init__(parent, "Add New Product", width=550, height=640)
+        super().__init__(parent, "Add New Product", width=600, height=680)
         self.init_ui()
         
     def init_ui(self):
@@ -212,7 +212,7 @@ class EditProductDialog(ModernDialog):
     
     def __init__(self, parent, product):
         self.product = product
-        super().__init__(parent, "Edit Product", width=550, height=640)
+        super().__init__(parent, "Edit Product", width=600, height=680)
         self.init_ui()
         
     def init_ui(self):
@@ -379,7 +379,7 @@ class AddUserDialog(ModernDialog):
     """Modern dialog for adding a new user"""
     
     def __init__(self, parent):
-        super().__init__(parent, "Add New User", width=550, height=620)
+        super().__init__(parent, "Add New User", width=600, height=680)
         self.init_ui()
         
     def init_ui(self):
@@ -496,7 +496,7 @@ class AddUserDialog(ModernDialog):
                 fg_color=THEME_COLORS["gradient_mid"],
                 hover_color=THEME_COLORS["gradient_start"]
             )
-            rb.pack(side="left", padx=15, pady=12)
+            rb.pack(side="left", padx=10, pady=12)
         
         # Buttons
         btn_frame = ctk.CTkFrame(main_card, fg_color="transparent")
@@ -832,4 +832,54 @@ class BrowseProductsDialog(ModernDialog):
         
     def select_product(self, product):
         self.result = product
+        self.destroy()
+
+
+class InvoiceDialog(ModernDialog):
+    """Modern dialog for displaying generated invoices/receipts"""
+    
+    def __init__(self, parent, receipt_text):
+        super().__init__(parent, "Transaction Receipt", width=400, height=650)
+        self.receipt_text = receipt_text
+        self.init_ui()
+        
+    def init_ui(self):
+        main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Action Bar
+        actions = ctk.CTkFrame(main_frame, fg_color="transparent")
+        actions.pack(fill="x", pady=(0, 15))
+        
+        ctk.CTkButton(
+            actions, text=f"{ICONS['settings']} Print Copy", 
+            width=120, height=35,
+            command=self.print_simulated
+        ).pack(side="left")
+        
+        ctk.CTkButton(
+            actions, text=f"{ICONS['close']} Close", 
+            fg_color=THEME_COLORS["surface"],
+            width=100, height=35,
+            command=self.destroy
+        ).pack(side="right")
+        
+        # Receipt Text Area
+        receipt_card = create_card_frame(main_frame, fg_color="#F1F5F9") # Paper White
+        receipt_card.pack(fill="both", expand=True)
+        
+        # Monospaced font is critical for receipt alignment
+        receipt_display = ctk.CTkTextbox(
+            receipt_card, 
+            fg_color="transparent", 
+            text_color="#1E293B", # Dark Ink
+            font=("Consolas", 14),
+            padx=20, pady=20
+        )
+        receipt_display.pack(fill="both", expand=True)
+        receipt_display.insert("1.0", self.receipt_text)
+        receipt_display.configure(state="disabled") # Read only
+
+    def print_simulated(self):
+        messagebox.showinfo("Printer Status", "ESC/POS Command sent to thermal printer!")
         self.destroy()
