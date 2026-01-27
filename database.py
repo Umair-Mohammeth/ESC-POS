@@ -185,13 +185,15 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     try:
         # Deduct stock
         for item in items:
-            cursor.execute("SELECT stock_quantity FROM products WHERE id = ?", (item['id'],))
-            current_stock = cursor.fetchone()['stock_quantity']
-            if current_stock < item['qty']:
-                raise Exception(f"Insufficient stock for {item['name']}")
-            
-            new_stock = current_stock - item['qty']
-            cursor.execute("UPDATE products SET stock_quantity = ? WHERE id = ?", (new_stock, item['id']))
+            if item.get('id', 0) > 0:
+                cursor.execute("SELECT stock_quantity, name FROM products WHERE id = ?", (item['id'],))
+                row = cursor.fetchone()
+                if not row:
+                    raise Exception(f"Product ID {item['id']} not found")
+                if row['stock_quantity'] < item['qty']:
+                    raise Exception(f"Insufficient stock for {row['name']} (Available: {row['stock_quantity']})")
+
+                cursor.execute("UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?", (item['qty'], item['id']))
         
         # Record Transaction
         items_json = json.dumps(items)

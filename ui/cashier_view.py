@@ -138,7 +138,7 @@ class CashierView(ctk.CTkFrame):
             fg_color=THEME_COLORS["surface"],
             hover_color=THEME_COLORS["surface_light"],
             width=140, height=45,
-            command=lambda: messagebox.showinfo("Manual Entry", "Manual price entry coming in next update!")
+            command=self.manual_entry
         ).pack(side="left")
 
         # 2. Shopping Cart Card
@@ -306,6 +306,14 @@ class CashierView(ctk.CTkFrame):
         if product:
             self.add_to_cart(product)
 
+    def manual_entry(self):
+        """Show manual entry dialog"""
+        from ui.custom_dialogs import ManualEntryDialog
+        dialog = ManualEntryDialog(self)
+        product = dialog.get_result()
+        if product:
+            self.add_to_cart(product)
+
     def on_space_press(self, event):
         # Trigger payment if cart is not empty and not typing in entry fields
         focused = str(self.focus_get())
@@ -317,10 +325,6 @@ class CashierView(ctk.CTkFrame):
         pass
 
     def add_to_cart(self, product):
-        if product['stock_quantity'] <= 0:
-            messagebox.showwarning("Stock Alert", f"Cannot add {product['name']} - Out of stock!")
-            return
-
         # Get multiplier
         try:
             multiplier = int(self.qty_multiply.get().strip() or "1")
@@ -328,8 +332,21 @@ class CashierView(ctk.CTkFrame):
         except:
             multiplier = 1
 
+        if product['stock_quantity'] < multiplier:
+            messagebox.showwarning("Stock Alert", f"Insufficient stock for {product['name']}!\nAvailable: {product['stock_quantity']}")
+            return
+
         for item in self.cart:
-            if item['id'] == product['id']:
+            # Merge if same product ID (>0) OR if it's a manual entry (ID=0) with same name and price
+            is_same_product = (item['id'] == product['id'] and item['id'] > 0)
+            is_same_manual = (item['id'] == 0 and product.get('id') == 0 and
+                             item['name'] == product['name'] and
+                             item['price'] == product['price'])
+
+            if is_same_product or is_same_manual:
+                if item['qty'] + multiplier > product['stock_quantity']:
+                    messagebox.showwarning("Stock Alert", f"Insufficient stock for {product['name']}!\nAvailable: {product['stock_quantity']}\nIn Cart: {item['qty']}")
+                    return
                 item['qty'] += multiplier
                 item['subtotal'] = item['qty'] * item['price']
                 self.update_cart_display()
