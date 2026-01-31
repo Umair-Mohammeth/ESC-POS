@@ -18,7 +18,7 @@ class CashierView(ctk.CTkFrame):
     def destroy(self):
         """Clean up bindings before destruction"""
         try:
-            self.winfo_toplevel().unbind("<space>")
+            self.winfo_toplevel().unbind("<Return>")
         except:
             pass
         super().destroy()
@@ -230,7 +230,7 @@ class CashierView(ctk.CTkFrame):
         # 3. Checkout Buttons
         self.pay_btn = ctk.CTkButton(
             right_actions,
-            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Spacebar)",
+            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Enter)",
             height=100,
             font=(FONTS["primary"], 22, "bold"),
             fg_color=THEME_COLORS["success"],
@@ -254,7 +254,13 @@ class CashierView(ctk.CTkFrame):
         ).pack(fill="x")
 
         self.qty_multiply.focus_set()
-        self.after(10, lambda: self.winfo_toplevel().bind("<space>", self.on_space_press))
+        self.after(10, lambda: self.winfo_toplevel().bind("<Return>", self.on_return_press))
+
+    def on_return_press(self, event):
+        # Trigger payment if cart is not empty and not typing in entry fields
+        focused = str(self.focus_get())
+        if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry), str(self.paid_entry)]:
+            self.process_payment()
 
     def update_change_due(self):
         """Calculate and display change based on cash received"""
@@ -313,12 +319,6 @@ class CashierView(ctk.CTkFrame):
         product = dialog.get_result()
         if product:
             self.add_to_cart(product)
-
-    def on_space_press(self, event):
-        # Trigger payment if cart is not empty and not typing in entry fields
-        focused = str(self.focus_get())
-        if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry), str(self.paid_entry)]:
-            self.process_payment()
 
     def handle_search(self):
         # Entry removed - this is a fallback or for barcode scan bypass if needed
@@ -471,7 +471,6 @@ class CashierView(ctk.CTkFrame):
             messagebox.showwarning("Validation Error", "Please enter a valid amount in Cash Received.")
             return
 
-        from database import create_transaction
         from printer_service import PrinterService
         from ui.custom_dialogs import InvoiceDialog
         

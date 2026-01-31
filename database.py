@@ -76,13 +76,19 @@ def init_db():
     )
     ''')
     
-    # Migration: Add discount columns if not exist
+    # Migration: Add subtotal column if not exists
+    try:
+        cursor.execute("SELECT subtotal FROM transactions LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
+        print("Added subtotal column to transactions table.")
+
+    # Migration: Add discount_amount column if not exists
     try:
         cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
     except sqlite3.OperationalError:
-        cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
         cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+        print("Added discount_amount column to transactions table.")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -275,19 +281,31 @@ def get_user_logs():
 # Admin Helpers - Products
 def add_product(name, barcode, category, price, stock):
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO products (name, barcode, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)", 
-                   (name, barcode, category, price, stock))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO products (name, barcode, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)",
+                       (name, barcode, category, price, stock))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        if "barcode" in str(e).lower():
+            raise Exception(f"Barcode '{barcode}' already exists.")
+        raise e
+    finally:
+        conn.close()
 
 def update_product(id, name, barcode, category, price, stock):
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE products SET name=?, barcode=?, category=?, price=?, stock_quantity=? WHERE id=?", 
-                   (name, barcode, category, price, stock, id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE products SET name=?, barcode=?, category=?, price=?, stock_quantity=? WHERE id=?",
+                       (name, barcode, category, price, stock, id))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        if "barcode" in str(e).lower():
+            raise Exception(f"Barcode '{barcode}' already exists.")
+        raise e
+    finally:
+        conn.close()
 
 def delete_product(id):
     conn = get_db_connection()
@@ -307,17 +325,33 @@ def get_users():
 
 def add_user(name, username, pin, role):
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, username, pin, role))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, username, pin, role))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        if "username" in str(e).lower():
+            raise Exception(f"Username '{username}' already exists.")
+        if "pin" in str(e).lower():
+            raise Exception(f"PIN already exists. Please choose a unique PIN.")
+        raise e
+    finally:
+        conn.close()
 
 def update_user(id, name, username, pin, role):
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, username, pin, role, id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, username, pin, role, id))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        if "username" in str(e).lower():
+            raise Exception(f"Username '{username}' already exists.")
+        if "pin" in str(e).lower():
+            raise Exception(f"PIN already exists. Please choose a unique PIN.")
+        raise e
+    finally:
+        conn.close()
 
 def delete_user(id):
     conn = get_db_connection()
