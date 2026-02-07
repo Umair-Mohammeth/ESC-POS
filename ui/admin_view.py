@@ -387,15 +387,18 @@ class AdminView(ctk.CTkFrame):
         result = dialog.get_result()
         
         if result:
-            db.add_product(
-                result['name'],
-                result['barcode'],
-                result.get('category', 'General'),
-                result['price'],
-                result['stock']
-            )
-            messagebox.showinfo("Success", f"Product '{result['name']}' added successfully!")
-            self.load_products()
+            try:
+                db.add_product(
+                    result['name'],
+                    result['barcode'],
+                    result.get('category', 'General'),
+                    result['price'],
+                    result['stock']
+                )
+                messagebox.showinfo("Success", f"Product '{result['name']}' added successfully!")
+                self.load_products()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not add product. Barcode might be taken.\n\nError: {str(e)}")
 
     def edit_product_dialog(self, p):
         """Show modern edit product dialog"""
@@ -403,22 +406,28 @@ class AdminView(ctk.CTkFrame):
         result = dialog.get_result()
         
         if result:
-            db.update_product(
-                p['id'],
-                result['name'],
-                result['barcode'],
-                result.get('category', 'General'),
-                result['price'],
-                result['stock']
-            )
-            messagebox.showinfo("Success", "Product updated successfully!")
-            self.load_products()
+            try:
+                db.update_product(
+                    p['id'],
+                    result['name'],
+                    result['barcode'],
+                    result.get('category', 'General'),
+                    result['price'],
+                    result['stock']
+                )
+                messagebox.showinfo("Success", "Product updated successfully!")
+                self.load_products()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not update product. Barcode might be taken.\n\nError: {str(e)}")
 
     def del_prod(self, pid):
         if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this product?"):
-            db.delete_product(pid)
-            messagebox.showinfo("Success", "Product deleted successfully!")
-            self.load_products()
+            try:
+                db.delete_product(pid)
+                messagebox.showinfo("Success", "Product deleted successfully!")
+                self.load_products()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not delete product.\n\nError: {str(e)}")
 
     def add_user_dialog(self):
         """Show modern add user dialog"""
@@ -435,6 +444,9 @@ class AdminView(ctk.CTkFrame):
 
     def del_user(self, uid):
         if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this user?"):
-            db.delete_user(uid)
-            messagebox.showinfo("Success", "User deleted successfully!")
-            self.load_users()
+            try:
+                db.delete_user(uid)
+                messagebox.showinfo("Success", "User deleted successfully!")
+                self.load_users()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not delete user. They may have existing transactions or logs.\n\nError: {str(e)}")
