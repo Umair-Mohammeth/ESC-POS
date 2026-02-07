@@ -35,13 +35,13 @@ class PrinterService:
         receipt.append("-" * width)
         
         # Totals
-        receipt.append(f"Subtotal:       ${subtotal:14.2f}")
+        receipt.append(f"Subtotal:".ljust(16) + f"${subtotal:15.2f}")
         if discount > 0:
-            receipt.append(f"Discount:      -${discount:14.2f}")
+            receipt.append(f"Discount:".ljust(16) + f"-${discount:14.2f}")
         receipt.append("-" * width)
-        receipt.append(f"TOTAL:          ${total:14.2f}")
-        receipt.append(f"Cash RCVD:      ${cash_received:14.2f}")
-        receipt.append(f"Change:         ${change_due:14.2f}")
+        receipt.append(f"TOTAL:".ljust(16) + f"${total:15.2f}")
+        receipt.append(f"Cash RCVD:".ljust(16) + f"${cash_received:15.2f}")
+        receipt.append(f"Change:".ljust(16) + f"${change_due:15.2f}")
         
         # Footer
         receipt.append("-" * width)

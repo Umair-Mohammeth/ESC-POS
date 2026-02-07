@@ -18,7 +18,7 @@ class CashierView(ctk.CTkFrame):
     def destroy(self):
         """Clean up bindings before destruction"""
         try:
-            self.winfo_toplevel().unbind("<space>")
+            self.winfo_toplevel().unbind("<Return>")
         except:
             pass
         super().destroy()
@@ -230,7 +230,7 @@ class CashierView(ctk.CTkFrame):
         # 3. Checkout Buttons
         self.pay_btn = ctk.CTkButton(
             right_actions,
-            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Spacebar)",
+            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Enter)",
             height=100,
             font=(FONTS["primary"], 22, "bold"),
             fg_color=THEME_COLORS["success"],
@@ -254,7 +254,7 @@ class CashierView(ctk.CTkFrame):
         ).pack(fill="x")
 
         self.qty_multiply.focus_set()
-        self.after(10, lambda: self.winfo_toplevel().bind("<space>", self.on_space_press))
+        self.after(10, lambda: self.winfo_toplevel().bind("<Return>", self.on_enter_press))
 
     def update_change_due(self):
         """Calculate and display change based on cash received"""
@@ -314,17 +314,19 @@ class CashierView(ctk.CTkFrame):
         if product:
             self.add_to_cart(product)
 
-    def on_space_press(self, event):
-        # Trigger payment if cart is not empty and not typing in entry fields
+    def on_enter_press(self, event):
+        # Trigger payment if cart is not empty and not typing in certain fields
         focused = str(self.focus_get())
-        if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry), str(self.paid_entry)]:
+        # We allow Enter to trigger payment if not in qty or promo entry.
+        # In paid_entry, Enter is often used to confirm, but here we can let it trigger payment too.
+        if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry)]:
             self.process_payment()
 
     def handle_search(self):
         # Entry removed - this is a fallback or for barcode scan bypass if needed
         pass
 
-    def add_to_cart(self, product):
+    def add_to_cart(self, product_template):
         # Get multiplier
         try:
             multiplier = int(self.qty_multiply.get().strip() or "1")
@@ -332,20 +334,32 @@ class CashierView(ctk.CTkFrame):
         except:
             multiplier = 1
 
-        if product['stock_quantity'] < multiplier:
-            messagebox.showwarning("Stock Alert", f"Insufficient stock for {product['name']}!\nAvailable: {product['stock_quantity']}")
+        # Fetch fresh product data if it's a database product
+        product_id = product_template.get('id', 0)
+        if product_id > 0:
+            from database import get_product_by_id
+            product = get_product_by_id(product_id)
+            if not product:
+                messagebox.showerror("Error", "Product no longer exists in database.")
+                return
+        else:
+            product = product_template
+
+        if product.get('stock_quantity', 0) < multiplier:
+            messagebox.showwarning("Stock Alert", f"Insufficient stock for {product['name']}!\nAvailable: {product.get('stock_quantity', 0)}")
             return
 
         for item in self.cart:
             # Merge if same product ID (>0) OR if it's a manual entry (ID=0) with same name and price
-            is_same_product = (item['id'] == product['id'] and item['id'] > 0)
-            is_same_manual = (item['id'] == 0 and product.get('id') == 0 and
+            item_id = item.get('id', 0)
+            is_same_product = (item_id == product_id and item_id > 0)
+            is_same_manual = (item_id == 0 and product_id == 0 and
                              item['name'] == product['name'] and
                              item['price'] == product['price'])
 
             if is_same_product or is_same_manual:
-                if item['qty'] + multiplier > product['stock_quantity']:
-                    messagebox.showwarning("Stock Alert", f"Insufficient stock for {product['name']}!\nAvailable: {product['stock_quantity']}\nIn Cart: {item['qty']}")
+                if item['qty'] + multiplier > product.get('stock_quantity', 0):
+                    messagebox.showwarning("Stock Alert", f"Insufficient stock for {product['name']}!\nAvailable: {product.get('stock_quantity', 0)}\nIn Cart: {item['qty']}")
                     return
                 item['qty'] += multiplier
                 item['subtotal'] = item['qty'] * item['price']
@@ -355,7 +369,7 @@ class CashierView(ctk.CTkFrame):
                 return
 
         self.cart.append({
-            'id': product['id'],
+            'id': product_id,
             'name': product['name'],
             'price': product['price'],
             'qty': multiplier,

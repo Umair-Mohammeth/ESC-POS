@@ -76,13 +76,25 @@ def init_db():
     )
     ''')
     
-    # Migration: Add discount columns if not exist
+    # Migration: Add subtotal column if not exists
+    try:
+        cursor.execute("SELECT subtotal FROM transactions LIMIT 1")
+    except sqlite3.OperationalError:
+        try:
+            cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
+            print("Added subtotal column to transactions table.")
+        except Exception as e:
+            print(f"Migration error (subtotal): {e}")
+
+    # Migration: Add discount_amount column if not exists
     try:
         cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
     except sqlite3.OperationalError:
-        cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
-        cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+        try:
+            cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
+            print("Added discount_amount column to transactions table.")
+        except Exception as e:
+            print(f"Migration error (discount_amount): {e}")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -149,6 +161,16 @@ def get_product_by_barcode(barcode):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM products WHERE barcode = ?", (barcode,))
+    product = cursor.fetchone()
+    conn.close()
+    if product:
+        return dict(product)
+    return None
+
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
     product = cursor.fetchone()
     conn.close()
     if product:
