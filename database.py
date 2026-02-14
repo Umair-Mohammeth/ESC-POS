@@ -1,13 +1,25 @@
 import sqlite3
 import os
+import json
 from datetime import datetime
 
 DB_NAME = "pos_system.db"
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
+def get_db_connection(isolation_level=None):
+    conn = sqlite3.connect(DB_NAME, isolation_level=isolation_level)
     conn.row_factory = sqlite3.Row
     return conn
+
+def add_column_if_not_exists(cursor, table, column, definition):
+    """Helper to add a column only if it doesn't already exist"""
+    try:
+        cursor.execute(f"SELECT {column} FROM {table} LIMIT 1")
+    except sqlite3.OperationalError:
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            print(f"Migration: Added column '{column}' to table '{table}'")
+        except Exception as e:
+            print(f"Migration error ({table}.{column}): {e}")
 
 def init_db():
     conn = get_db_connection()
@@ -76,13 +88,17 @@ def init_db():
     )
     ''')
     
-    # Migration: Add discount columns if not exist
+    # Robust Migrations
+    add_column_if_not_exists(cursor, "transactions", "subtotal", "REAL DEFAULT 0")
+    add_column_if_not_exists(cursor, "transactions", "discount_amount", "REAL DEFAULT 0")
+    add_column_if_not_exists(cursor, "users", "username", "TEXT")
+    add_column_if_not_exists(cursor, "products", "category", "TEXT DEFAULT 'General'")
+
+    # Ensure indexes exist
     try:
-        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
-    except sqlite3.OperationalError:
-        cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
-        cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username) WHERE username IS NOT NULL")
+    except:
+        pass
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -94,27 +110,6 @@ def init_db():
         ]
         cursor.executemany("INSERT INTO discounts (code, type, value, min_amount) VALUES (?, ?, ?, ?)", discount_seeds)
         print("Sample discounts created.")
-    
-    # Migration: Add username column if not exists
-    try:
-        cursor.execute("SELECT username FROM users LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
-            print("Added username column to users table.")
-        except Exception as e:
-            print(f"Migration error (username): {e}")
-
-    # Migration: Add category column if not exists
-    try:
-        cursor.execute("SELECT category FROM products LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
-            print("Added category column to products table.")
-        except Exception as e:
-            print(f"Migration error (category): {e}")
     
     # Seed default users if empty
     cursor.execute("SELECT count(*) FROM users")
@@ -178,22 +173,25 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     items: list of dicts {id, name, price, qty}
     Returns transaction_id or raises Exception
     """
-    import json
-    conn = get_db_connection()
+    conn = get_db_connection(isolation_level='IMMEDIATE')
     cursor = conn.cursor()
     
     try:
-        # Deduct stock
+        # Deduct stock atomically
         for item in items:
             if item.get('id', 0) > 0:
-                cursor.execute("SELECT stock_quantity, name FROM products WHERE id = ?", (item['id'],))
-                row = cursor.fetchone()
-                if not row:
-                    raise Exception(f"Product ID {item['id']} not found")
-                if row['stock_quantity'] < item['qty']:
-                    raise Exception(f"Insufficient stock for {row['name']} (Available: {row['stock_quantity']})")
-
-                cursor.execute("UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?", (item['qty'], item['id']))
+                cursor.execute(
+                    "UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND stock_quantity >= ?",
+                    (item['qty'], item['id'], item['qty'])
+                )
+                if cursor.rowcount == 0:
+                    # Check why it failed
+                    cursor.execute("SELECT name, stock_quantity FROM products WHERE id = ?", (item['id'],))
+                    row = cursor.fetchone()
+                    if not row:
+                        raise Exception(f"Product ID {item['id']} not found")
+                    else:
+                        raise Exception(f"Insufficient stock for {row['name']} (Available: {row['stock_quantity']})")
         
         # Record Transaction
         items_json = json.dumps(items)
@@ -202,8 +200,9 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
             VALUES (?, ?, ?, ?, ?)
         ''', (subtotal, discount_amount, total_amount, cashier_id, items_json))
         
+        last_id = cursor.lastrowid
         conn.commit()
-        return cursor.lastrowid
+        return last_id
     except Exception as e:
         conn.rollback()
         raise e

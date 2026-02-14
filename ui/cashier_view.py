@@ -19,6 +19,7 @@ class CashierView(ctk.CTkFrame):
         """Clean up bindings before destruction"""
         try:
             self.winfo_toplevel().unbind("<space>")
+            self.winfo_toplevel().unbind("<Return>")
         except:
             pass
         super().destroy()
@@ -254,7 +255,11 @@ class CashierView(ctk.CTkFrame):
         ).pack(fill="x")
 
         self.qty_multiply.focus_set()
-        self.after(10, lambda: self.winfo_toplevel().bind("<space>", self.on_space_press))
+        self.after(10, self.bind_keys)
+
+    def bind_keys(self):
+        self.winfo_toplevel().bind("<space>", self.on_space_press)
+        self.winfo_toplevel().bind("<Return>", self.on_enter_press)
 
     def update_change_due(self):
         """Calculate and display change based on cash received"""
@@ -318,6 +323,12 @@ class CashierView(ctk.CTkFrame):
         # Trigger payment if cart is not empty and not typing in entry fields
         focused = str(self.focus_get())
         if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry), str(self.paid_entry)]:
+            self.process_payment()
+
+    def on_enter_press(self, event):
+        # Trigger payment if cart is not empty and not typing in quantity or promo fields
+        focused = str(self.focus_get())
+        if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry)]:
             self.process_payment()
 
     def handle_search(self):
@@ -418,13 +429,17 @@ class CashierView(ctk.CTkFrame):
         self.cart_title.configure(text=f"{ICONS['cart']} Current Order ({total_items} Items)")
         self.count_label.configure(text=f"{total_items} Items Selected")
 
-        # Calculation
+        # Calculation & Discount Re-verification
         discount_amt = 0
         if self.applied_discount:
-            if self.applied_discount['type'] == 'percentage':
-                discount_amt = subtotal * (self.applied_discount['value'] / 100)
+            if subtotal < self.applied_discount['min_amount']:
+                self.applied_discount = None
+                messagebox.showwarning("Discount Removed", "Minimum amount no longer met. Discount has been removed.")
             else:
-                discount_amt = self.applied_discount['value']
+                if self.applied_discount['type'] == 'percentage':
+                    discount_amt = subtotal * (self.applied_discount['value'] / 100)
+                else:
+                    discount_amt = self.applied_discount['value']
 
         total = max(0, subtotal - discount_amt)
         
