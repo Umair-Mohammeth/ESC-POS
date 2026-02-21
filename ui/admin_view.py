@@ -1,7 +1,7 @@
 import customtkinter as ctk
 import database as db
 from tkinter import messagebox
-from ui.custom_dialogs import AddProductDialog, EditProductDialog, AddUserDialog
+from ui.custom_dialogs import AddProductDialog, EditProductDialog, AddUserDialog, EditUserDialog
 from styles import (
     THEME_COLORS, RADIUS, SPACING, FONTS, ICONS,
     create_card_frame, get_status_color
@@ -344,10 +344,25 @@ class AdminView(ctk.CTkFrame):
                 text_color=THEME_COLORS["text_secondary"]
             ).pack(side="left")
             
-            # Delete button (except for admin user)
+            # Action Buttons (except for admin user for delete)
+            btn_frame = ctk.CTkFrame(content, fg_color="transparent")
+            btn_frame.pack(side="right")
+
+            ctk.CTkButton(
+                btn_frame,
+                text=f"{ICONS['edit']} Edit",
+                width=80,
+                height=35,
+                fg_color=THEME_COLORS["gradient_mid"],
+                hover_color=THEME_COLORS["gradient_start"],
+                corner_radius=RADIUS["sm"],
+                font=(FONTS["primary"], 13, "bold"),
+                command=lambda x=u: self.edit_user_dialog(x)
+            ).pack(side="left", padx=5)
+
             if u['id'] != 1:
                 ctk.CTkButton(
-                    content,
+                    btn_frame,
                     text=ICONS['delete'],
                     width=45,
                     height=35,
@@ -356,7 +371,7 @@ class AdminView(ctk.CTkFrame):
                     corner_radius=RADIUS["sm"],
                     font=(FONTS["primary"], 14),
                     command=lambda x=u['id']: self.del_user(x)
-                ).pack(side="right")
+                ).pack(side="left")
 
     def load_logs(self):
         """Load system usage logs"""
@@ -432,6 +447,19 @@ class AdminView(ctk.CTkFrame):
                 self.load_users()
             except Exception as e:
                 messagebox.showerror("Error", f"Could not add user. Username might be taken.\n\nError: {str(e)}")
+
+    def edit_user_dialog(self, u):
+        """Show modern edit user dialog"""
+        dialog = EditUserDialog(self, u)
+        result = dialog.get_result()
+
+        if result:
+            try:
+                db.update_user(u['id'], result['name'], result['username'], result['pin'], result['role'])
+                messagebox.showinfo("Success", "User updated successfully!")
+                self.load_users()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not update user.\n\nError: {str(e)}")
 
     def del_user(self, uid):
         if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this user?"):

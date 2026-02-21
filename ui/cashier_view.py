@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from database import get_product_by_barcode, search_products, create_transaction
+from database import get_product_by_barcode, search_products, create_transaction, get_product_by_id
 from tkinter import messagebox
 from styles import (
     THEME_COLORS, RADIUS, SPACING, FONTS, ICONS,
@@ -19,6 +19,7 @@ class CashierView(ctk.CTkFrame):
         """Clean up bindings before destruction"""
         try:
             self.winfo_toplevel().unbind("<space>")
+            self.winfo_toplevel().unbind("<Return>")
         except:
             pass
         super().destroy()
@@ -224,13 +225,14 @@ class CashierView(ctk.CTkFrame):
         
         self.promo_entry = ctk.CTkEntry(promo_box, placeholder_text="Discount Code", font=(FONTS["primary"], 13), height=40, fg_color=THEME_COLORS["background"], border_width=0)
         self.promo_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.promo_entry.bind("<Return>", lambda e: self.handle_discount())
         
         ctk.CTkButton(promo_box, text="Apply", width=70, height=40, fg_color=THEME_COLORS["info"], font=(FONTS["primary"], 12, "bold"), command=self.handle_discount).pack(side="right")
 
         # 3. Checkout Buttons
         self.pay_btn = ctk.CTkButton(
             right_actions,
-            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Spacebar)",
+            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Enter / Space)",
             height=100,
             font=(FONTS["primary"], 22, "bold"),
             fg_color=THEME_COLORS["success"],
@@ -254,7 +256,8 @@ class CashierView(ctk.CTkFrame):
         ).pack(fill="x")
 
         self.qty_multiply.focus_set()
-        self.after(10, lambda: self.winfo_toplevel().bind("<space>", self.on_space_press))
+        self.after(10, lambda: self.winfo_toplevel().bind("<space>", self.on_payment_shortcut))
+        self.after(10, lambda: self.winfo_toplevel().bind("<Return>", self.on_payment_shortcut))
 
     def update_change_due(self):
         """Calculate and display change based on cash received"""
@@ -314,7 +317,7 @@ class CashierView(ctk.CTkFrame):
         if product:
             self.add_to_cart(product)
 
-    def on_space_press(self, event):
+    def on_payment_shortcut(self, event):
         # Trigger payment if cart is not empty and not typing in entry fields
         focused = str(self.focus_get())
         if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry), str(self.paid_entry)]:
@@ -325,6 +328,12 @@ class CashierView(ctk.CTkFrame):
         pass
 
     def add_to_cart(self, product):
+        # Re-fetch product data for real-time stock validation
+        if product.get('id', 0) > 0:
+            latest = get_product_by_id(product['id'])
+            if latest:
+                product = latest
+
         # Get multiplier
         try:
             multiplier = int(self.qty_multiply.get().strip() or "1")
@@ -334,6 +343,12 @@ class CashierView(ctk.CTkFrame):
 
         if product['stock_quantity'] < multiplier:
             messagebox.showwarning("Stock Alert", f"Insufficient stock for {product['name']}!\nAvailable: {product['stock_quantity']}")
+            return
+
+        # Check existing quantity in cart
+        in_cart_qty = sum(item['qty'] for item in self.cart if item['id'] == product['id'] and item['id'] > 0)
+        if in_cart_qty + multiplier > product['stock_quantity']:
+            messagebox.showwarning("Stock Alert", f"Insufficient stock for {product['name']}!\nAvailable: {product['stock_quantity']}\nIn Cart: {in_cart_qty}")
             return
 
         for item in self.cart:
@@ -413,6 +428,10 @@ class CashierView(ctk.CTkFrame):
             ).pack(side="left")
             
             subtotal += item['subtotal']
+
+        # Re-verify and automatically remove applied discounts if subtotal falls below requirement
+        if self.applied_discount and subtotal < self.applied_discount.get('min_amount', 0):
+            self.applied_discount = None
 
         # Update Headers
         self.cart_title.configure(text=f"{ICONS['cart']} Current Order ({total_items} Items)")
