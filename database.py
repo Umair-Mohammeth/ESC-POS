@@ -145,6 +145,14 @@ def init_db():
     conn.commit()
     conn.close()
 
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    return dict(product) if product else None
+
 def get_product_by_barcode(barcode):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -180,6 +188,8 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     """
     import json
     conn = get_db_connection()
+    # Use IMMEDIATE to lock the database and prevent race conditions for stock
+    conn.execute("BEGIN IMMEDIATE")
     cursor = conn.cursor()
     
     try:

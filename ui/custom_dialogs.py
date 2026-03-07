@@ -42,92 +42,7 @@ class ModernDialog(ctk.CTkToplevel):
         self.wait_window()
         return self.result
 
-
-class AddProductDialog(ModernDialog):
-    """Modern dialog for adding a new product"""
-    
-    def __init__(self, parent):
-        super().__init__(parent, "Add New Product", width=600, height=680)
-        self.init_ui()
-        
-    def init_ui(self):
-        # Main container card
-        main_card = create_card_frame(
-            self,
-            fg_color=THEME_COLORS["background_light"],
-            corner_radius=RADIUS["lg"]
-        )
-        main_card.pack(fill="both", expand=True, padx=20, pady=20)
-        
-        # Header
-        header = ctk.CTkFrame(main_card, fg_color="transparent")
-        header.pack(fill="x", padx=20, pady=(20, 10))
-        
-        ctk.CTkLabel(
-            header,
-            text=f"{ICONS['product']} Add New Product",
-            font=(FONTS["primary"], 20, "bold"),
-            text_color=THEME_COLORS["text"]
-        ).pack(side="left")
-        
-        # Form container
-        form = ctk.CTkFrame(main_card, fg_color="transparent")
-        form.pack(fill="both", expand=True, padx=20, pady=10)
-        
-        # Product Name
-        self.create_input_field(form, "Product Name *", 0)
-        self.name_entry = self.last_entry
-        
-        # Barcode
-        self.create_input_field(form, "Barcode (Optional)", 1)
-        self.barcode_entry = self.last_entry
-        
-        # Category
-        self.create_input_field(form, "Category *", 2)
-        self.category_entry = self.last_entry
-        self.category_entry.insert(0, "General")
-        
-        # Price
-        self.create_input_field(form, "Price ($) *", 3)
-        self.price_entry = self.last_entry
-        
-        # Stock Quantity
-        self.create_input_field(form, "Initial Stock Quantity *", 4)
-        self.stock_entry = self.last_entry
-        self.stock_entry.insert(0, "0")
-        
-        # Buttons
-        btn_frame = ctk.CTkFrame(main_card, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=(10, 20))
-        
-        ctk.CTkButton(
-            btn_frame,
-            text=f"{ICONS['close']} Cancel",
-            width=120,
-            height=45,
-            fg_color="#334155",
-            hover_color="#475569",
-            corner_radius=RADIUS["md"],
-            font=(FONTS["primary"], 15, "bold"),
-            command=self.cancel
-        ).pack(side="right", padx=(10, 0))
-        
-        ctk.CTkButton(
-            btn_frame,
-            text=f"{ICONS['check']} Add Product",
-            width=150,
-            height=45,
-            fg_color="#059669",
-            hover_color="#047857",
-            corner_radius=RADIUS["md"],
-            font=(FONTS["primary"], 15, "bold"),
-            command=self.submit
-        ).pack(side="right")
-        
-        # Focus on first field
-        self.name_entry.focus()
-        
-    def create_input_field(self, parent, label, row):
+    def create_input_field(self, parent, label, entry_name):
         """Helper to create labeled input field"""
         container = ctk.CTkFrame(parent, fg_color="transparent")
         container.pack(fill="x", pady=8)
@@ -153,179 +68,60 @@ class AddProductDialog(ModernDialog):
         entry.bind("<FocusIn>", lambda e: entry.configure(border_color=THEME_COLORS["gradient_accent"]))
         entry.bind("<FocusOut>", lambda e: entry.configure(border_color=THEME_COLORS["surface_light"]))
         
-        self.last_entry = entry
-        self.last_container = container
-        
-    def validate_inputs(self):
-        """Validate form inputs"""
-        name = self.name_entry.get().strip()
-        price_str = self.price_entry.get().strip()
-        stock_str = self.stock_entry.get().strip()
-        
-        if not name:
-            messagebox.showerror("Validation Error", "Product name is required!")
-            self.name_entry.focus()
-            return False
-            
-        try:
-            price = float(price_str)
-            if price < 0:
-                raise ValueError()
-        except:
-            messagebox.showerror("Validation Error", "Please enter a valid price!")
-            self.price_entry.focus()
-            return False
-            
-        try:
-            stock = int(stock_str)
-            if stock < 0:
-                raise ValueError()
-        except:
-            messagebox.showerror("Validation Error", "Please enter a valid stock quantity!")
-            self.stock_entry.focus()
-            return False
-            
-        return True
-        
-    def submit(self):
-        """Handle form submission"""
-        if not self.validate_inputs():
-            return
-            
-        self.result = {
-            'name': self.name_entry.get().strip(),
-            'barcode': self.barcode_entry.get().strip(),
-            'category': self.category_entry.get().strip() or "General",
-            'price': float(self.price_entry.get().strip()),
-            'stock': int(self.stock_entry.get().strip())
-        }
-        self.destroy()
-        
+        setattr(self, entry_name, entry)
+        return container, entry
+
     def cancel(self):
         """Cancel and close dialog"""
         self.result = None
         self.destroy()
 
 
-class EditProductDialog(ModernDialog):
-    """Modern dialog for editing a product"""
+class ProductBaseDialog(ModernDialog):
+    """Base for product add/edit forms"""
     
-    def __init__(self, parent, product):
+    def __init__(self, parent, title, product=None):
+        super().__init__(parent, title, width=600, height=680)
         self.product = product
-        super().__init__(parent, "Edit Product", width=600, height=680)
         self.init_ui()
         
     def init_ui(self):
-        # Main container card
-        main_card = create_card_frame(
-            self,
-            fg_color=THEME_COLORS["background_light"],
-            corner_radius=RADIUS["lg"]
-        )
+        main_card = create_card_frame(self, fg_color=THEME_COLORS["background_light"], corner_radius=RADIUS["lg"])
         main_card.pack(fill="both", expand=True, padx=20, pady=20)
         
-        # Header
         header = ctk.CTkFrame(main_card, fg_color="transparent")
         header.pack(fill="x", padx=20, pady=(20, 10))
         
-        ctk.CTkLabel(
-            header,
-            text=f"{ICONS['edit']} Edit Product",
-            font=(FONTS["primary"], 20, "bold"),
-            text_color=THEME_COLORS["text"]
-        ).pack(side="left")
+        icon = ICONS['edit'] if self.product else ICONS['product']
+        ctk.CTkLabel(header, text=f"{icon} {self.title_text}", font=(FONTS["primary"], 20, "bold")).pack(side="left")
         
-        # Form container
         form = ctk.CTkFrame(main_card, fg_color="transparent")
         form.pack(fill="both", expand=True, padx=20, pady=10)
         
-        # Product Name
-        self.create_input_field(form, "Product Name *", 0)
-        self.name_entry = self.last_entry
-        self.name_entry.insert(0, self.product['name'])
+        self.create_input_field(form, "Product Name *", "name_entry")
+        self.create_input_field(form, "Barcode (Optional)", "barcode_entry")
+        self.create_input_field(form, "Category *", "category_entry")
+        self.create_input_field(form, "Price ($) *", "price_entry")
+        self.create_input_field(form, "Stock Quantity *", "stock_entry")
         
-        # Barcode
-        self.create_input_field(form, "Barcode (Optional)", 1)
-        self.barcode_entry = self.last_entry
-        self.barcode_entry.insert(0, self.product.get('barcode', ''))
-        
-        # Category
-        self.create_input_field(form, "Category *", 2)
-        self.category_entry = self.last_entry
-        self.category_entry.insert(0, self.product.get('category', 'General'))
-        
-        # Price
-        self.create_input_field(form, "Price ($) *", 3)
-        self.price_entry = self.last_entry
-        self.price_entry.insert(0, str(self.product['price']))
-        
-        # Stock Quantity
-        self.create_input_field(form, "Stock Quantity *", 4)
-        self.stock_entry = self.last_entry
-        self.stock_entry.insert(0, str(self.product['stock_quantity']))
-        
-        # Buttons
+        if self.product:
+            self.name_entry.insert(0, self.product['name'])
+            self.barcode_entry.insert(0, self.product.get('barcode', ''))
+            self.category_entry.insert(0, self.product.get('category', 'General'))
+            self.price_entry.insert(0, str(self.product['price']))
+            self.stock_entry.insert(0, str(self.product['stock_quantity']))
+        else:
+            self.category_entry.insert(0, "General")
+            self.stock_entry.insert(0, "0")
+
         btn_frame = ctk.CTkFrame(main_card, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=(10, 20))
         
-        ctk.CTkButton(
-            btn_frame,
-            text=f"{ICONS['close']} Cancel",
-            width=120,
-            height=45,
-            fg_color="#334155",
-            hover_color="#475569",
-            corner_radius=RADIUS["md"],
-            font=(FONTS["primary"], 15, "bold"),
-            command=self.cancel
-        ).pack(side="right", padx=(10, 0))
-        
-        ctk.CTkButton(
-            btn_frame,
-            text=f"{ICONS['check']} Save Changes",
-            width=150,
-            height=45,
-            fg_color=THEME_COLORS["gradient_mid"],
-            hover_color=THEME_COLORS["gradient_start"],
-            corner_radius=RADIUS["md"],
-            font=(FONTS["primary"], 15, "bold"),
-            command=self.submit
-        ).pack(side="right")
-        
-        # Focus on first field
+        ctk.CTkButton(btn_frame, text=f"{ICONS['close']} Cancel", width=120, height=45, fg_color="#334155", command=self.cancel).pack(side="right", padx=(10, 0))
+        ctk.CTkButton(btn_frame, text=f"{ICONS['check']} {self.submit_text}", width=150, height=45, fg_color=THEME_COLORS["gradient_mid"], command=self.submit).pack(side="right")
         self.name_entry.focus()
         
-    def create_input_field(self, parent, label, row):
-        """Helper to create labeled input field"""
-        container = ctk.CTkFrame(parent, fg_color="transparent")
-        container.pack(fill="x", pady=8)
-        
-        ctk.CTkLabel(
-            container,
-            text=label,
-            font=(FONTS["primary"], 14),
-            text_color=THEME_COLORS["text_secondary"],
-            anchor="w"
-        ).pack(anchor="w", pady=(0, 5))
-        
-        entry = ctk.CTkEntry(
-            container,
-            height=45,
-            font=(FONTS["primary"], 15),
-            fg_color=THEME_COLORS["surface"],
-            border_color=THEME_COLORS["surface_light"],
-            border_width=2,
-            corner_radius=RADIUS["md"]
-        )
-        entry.pack(fill="x")
-        entry.bind("<FocusIn>", lambda e: entry.configure(border_color=THEME_COLORS["gradient_accent"]))
-        entry.bind("<FocusOut>", lambda e: entry.configure(border_color=THEME_COLORS["surface_light"]))
-        
-        self.last_entry = entry
-        self.last_container = container
-        
     def validate_inputs(self):
-        """Validate form inputs"""
         name = self.name_entry.get().strip()
         price_str = self.price_entry.get().strip()
         stock_str = self.stock_entry.get().strip()
@@ -334,32 +130,24 @@ class EditProductDialog(ModernDialog):
             messagebox.showerror("Validation Error", "Product name is required!")
             self.name_entry.focus()
             return False
-            
         try:
             price = float(price_str)
-            if price < 0:
-                raise ValueError()
+            if price < 0: raise ValueError()
         except:
             messagebox.showerror("Validation Error", "Please enter a valid price!")
             self.price_entry.focus()
             return False
-            
         try:
             stock = int(stock_str)
-            if stock < 0:
-                raise ValueError()
+            if stock < 0: raise ValueError()
         except:
             messagebox.showerror("Validation Error", "Please enter a valid stock quantity!")
             self.stock_entry.focus()
             return False
-            
         return True
         
     def submit(self):
-        """Handle form submission"""
-        if not self.validate_inputs():
-            return
-            
+        if not self.validate_inputs(): return
         self.result = {
             'name': self.name_entry.get().strip(),
             'barcode': self.barcode_entry.get().strip(),
@@ -368,239 +156,101 @@ class EditProductDialog(ModernDialog):
             'stock': int(self.stock_entry.get().strip())
         }
         self.destroy()
-        
-    def cancel(self):
-        """Cancel and close dialog"""
-        self.result = None
-        self.destroy()
 
-
-class AddUserDialog(ModernDialog):
-    """Modern dialog for adding a new user"""
-    
+class AddProductDialog(ProductBaseDialog):
+    title_text = "Add New Product"
+    submit_text = "Add Product"
     def __init__(self, parent):
-        super().__init__(parent, "Add New User", width=600, height=680)
+        super().__init__(parent, self.title_text)
+
+class EditProductDialog(ProductBaseDialog):
+    title_text = "Edit Product"
+    submit_text = "Save Changes"
+    def __init__(self, parent, product):
+        super().__init__(parent, self.title_text, product)
+
+
+class UserBaseDialog(ModernDialog):
+    """Base for user add/edit forms"""
+    
+    def __init__(self, parent, title, user=None):
+        super().__init__(parent, title, width=600, height=680)
+        self.user = user
         self.init_ui()
         
     def init_ui(self):
-        # Main container card
-        main_card = create_card_frame(
-            self,
-            fg_color=THEME_COLORS["background_light"],
-            corner_radius=RADIUS["lg"]
-        )
+        main_card = create_card_frame(self, fg_color=THEME_COLORS["background_light"], corner_radius=RADIUS["lg"])
         main_card.pack(fill="both", expand=True, padx=20, pady=20)
         
-        # Header
         header = ctk.CTkFrame(main_card, fg_color="transparent")
         header.pack(fill="x", padx=20, pady=(20, 10))
         
-        ctk.CTkLabel(
-            header,
-            text=f"{ICONS['user']} Add New User",
-            font=(FONTS["primary"], 20, "bold"),
-            text_color=THEME_COLORS["text"]
-        ).pack(side="left")
+        ctk.CTkLabel(header, text=f"{ICONS['user']} {self.title_text}", font=(FONTS["primary"], 20, "bold")).pack(side="left")
         
-        # Form container
         form = ctk.CTkFrame(main_card, fg_color="transparent")
         form.pack(fill="both", expand=True, padx=20, pady=10)
         
-        # Full Name
-        self.create_input_field(form, "Full Name *", 0)
-        self.name_entry = self.last_entry
+        self.create_input_field(form, "Full Name *", "name_entry")
         
-        # Username
-        self.create_input_field(form, "Username *", 1)
-        self.username_frame = self.last_container
-        self.username_entry = self.last_entry
-        
-        # Suggest Button
-        # Re-creating username field manually for custom layout with button
-        self.username_entry.destroy()
-        self.username_frame.destroy()
-        
+        # Username with Suggest Button
         username_container = ctk.CTkFrame(form, fg_color="transparent")
         username_container.pack(fill="x", pady=8)
-        
         header_frame = ctk.CTkFrame(username_container, fg_color="transparent")
         header_frame.pack(fill="x", pady=(0, 5))
-        
-        ctk.CTkLabel(
-            header_frame,
-            text="Username *",
-            font=(FONTS["primary"], 14),
-            text_color=THEME_COLORS["text_secondary"],
-            anchor="w"
-        ).pack(side="left")
-        
-        # Modern Suggest Button
-        ctk.CTkButton(
-            header_frame,
-            text="✨ Suggest",
-            width=70,
-            height=24,
-            font=(FONTS["primary"], 11, "bold"),
-            fg_color=THEME_COLORS["gradient_accent"],
-            command=self.suggest_username
-        ).pack(side="right")
-        
-        self.username_entry = ctk.CTkEntry(
-            username_container,
-            height=45,
-            font=(FONTS["primary"], 15),
-            fg_color=THEME_COLORS["surface"],
-            border_color=THEME_COLORS["surface_light"],
-            border_width=2,
-            corner_radius=RADIUS["md"]
-        )
+        ctk.CTkLabel(header_frame, text="Username *", font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(side="left")
+        ctk.CTkButton(header_frame, text="✨ Suggest", width=70, height=24, font=(FONTS["primary"], 11, "bold"), fg_color=THEME_COLORS["gradient_accent"], command=self.suggest_username).pack(side="right")
+        self.username_entry = ctk.CTkEntry(username_container, height=45, font=(FONTS["primary"], 15), fg_color=THEME_COLORS["surface"], border_color=THEME_COLORS["surface_light"], border_width=2, corner_radius=RADIUS["md"])
         self.username_entry.pack(fill="x")
-        self.username_entry.bind("<FocusIn>", lambda e: self.username_entry.configure(border_color=THEME_COLORS["gradient_accent"]))
-        self.username_entry.bind("<FocusOut>", lambda e: self.username_entry.configure(border_color=THEME_COLORS["surface_light"]))
 
-        # PIN
-        self.create_input_field(form, "4-Digit PIN *", 2)
-        self.pin_entry = self.last_entry
+        self.create_input_field(form, "4-Digit PIN *", "pin_entry")
         
         # Role Selection
         role_container = ctk.CTkFrame(form, fg_color="transparent")
         role_container.pack(fill="x", pady=8)
-        
-        ctk.CTkLabel(
-            role_container,
-            text="Role *",
-            font=(FONTS["primary"], 14),
-            text_color=THEME_COLORS["text_secondary"],
-            anchor="w"
-        ).pack(anchor="w", pady=(0, 5))
-        
+        ctk.CTkLabel(role_container, text="Role *", font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w", pady=(0, 5))
         self.role_var = ctk.StringVar(value="cashier")
-        
         role_options = ctk.CTkFrame(role_container, fg_color=THEME_COLORS["surface"], corner_radius=RADIUS["md"])
         role_options.pack(fill="x")
+        roles = [("Admin", "admin"), ("Manager", "manager"), ("Cashier", "cashier"), ("Stocker", "stocker")]
+        for label, value in roles:
+            ctk.CTkRadioButton(role_options, text=label, variable=self.role_var, value=value, font=(FONTS["primary"], 14), fg_color=THEME_COLORS["gradient_mid"]).pack(side="left", padx=10, pady=12)
         
-        roles = [
-            ("Admin", "admin"),
-            ("Manager", "manager"),
-            ("Cashier", "cashier"),
-            ("Stocker", "stocker")
-        ]
-        
-        for i, (label, value) in enumerate(roles):
-            rb = ctk.CTkRadioButton(
-                role_options,
-                text=label,
-                variable=self.role_var,
-                value=value,
-                font=(FONTS["primary"], 14),
-                fg_color=THEME_COLORS["gradient_mid"],
-                hover_color=THEME_COLORS["gradient_start"]
-            )
-            rb.pack(side="left", padx=10, pady=12)
-        
-        # Buttons
+        if self.user:
+            self.name_entry.insert(0, self.user['name'])
+            self.username_entry.insert(0, self.user.get('username', ''))
+            self.pin_entry.insert(0, self.user['pin'])
+            self.role_var.set(self.user['role'])
+
         btn_frame = ctk.CTkFrame(main_card, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=(10, 20))
         
-        ctk.CTkButton(
-            btn_frame,
-            text=f"{ICONS['close']} Cancel",
-            width=120,
-            height=45,
-            fg_color="#334155",
-            hover_color="#475569",
-            corner_radius=RADIUS["md"],
-            font=(FONTS["primary"], 15, "bold"),
-            command=self.cancel
-        ).pack(side="right", padx=(10, 0))
-        
-        ctk.CTkButton(
-            btn_frame,
-            text=f"{ICONS['check']} Add User",
-            width=150,
-            height=45,
-            fg_color="#059669",
-            hover_color="#047857",
-            corner_radius=RADIUS["md"],
-            font=(FONTS["primary"], 15, "bold"),
-            command=self.submit
-        ).pack(side="right")
-        
-        # Focus on first field
+        ctk.CTkButton(btn_frame, text=f"{ICONS['close']} Cancel", width=120, height=45, fg_color="#334155", command=self.cancel).pack(side="right", padx=(10, 0))
+        ctk.CTkButton(btn_frame, text=f"{ICONS['check']} {self.submit_text}", width=150, height=45, fg_color="#059669", command=self.submit).pack(side="right")
         self.name_entry.focus()
-        
-    def create_input_field(self, parent, label, row):
-        """Helper to create labeled input field"""
-        container = ctk.CTkFrame(parent, fg_color="transparent")
-        container.pack(fill="x", pady=8)
-        
-        ctk.CTkLabel(
-            container,
-            text=label,
-            font=(FONTS["primary"], 14),
-            text_color=THEME_COLORS["text_secondary"],
-            anchor="w"
-        ).pack(anchor="w", pady=(0, 5))
-        
-        entry = ctk.CTkEntry(
-            container,
-            height=45,
-            font=(FONTS["primary"], 15),
-            fg_color=THEME_COLORS["surface"],
-            border_color=THEME_COLORS["surface_light"],
-            border_width=2,
-            corner_radius=RADIUS["md"]
-        )
-        entry.pack(fill="x")
-        entry.bind("<FocusIn>", lambda e: entry.configure(border_color=THEME_COLORS["gradient_accent"]))
-        entry.bind("<FocusOut>", lambda e: entry.configure(border_color=THEME_COLORS["surface_light"]))
-        
-        self.last_entry = entry
-        self.last_container = container
 
     def suggest_username(self):
-        """Generate a suggested username"""
         name = self.name_entry.get().strip()
-        if not name:
-            messagebox.showinfo("Tip", "Enter a name first to get a suggestion!")
-            return
-            
+        if not name: return
         import random
         first_name = name.split()[0].lower()
-        random_num = random.randint(100, 999)
-        suggestion = f"{first_name}{random_num}"
-        
         self.username_entry.delete(0, 'end')
-        self.username_entry.insert(0, suggestion)
+        self.username_entry.insert(0, f"{first_name}{random.randint(100, 999)}")
         
     def validate_inputs(self):
-        """Validate form inputs"""
-        name = self.name_entry.get().strip()
-        username = self.username_entry.get().strip()
-        pin = self.pin_entry.get().strip()
-        
-        if not name:
+        if not self.name_entry.get().strip():
             messagebox.showerror("Validation Error", "Full name is required!")
-            self.name_entry.focus()
             return False
-            
-        if not username:
+        if not self.username_entry.get().strip():
             messagebox.showerror("Validation Error", "Username is required!")
-            self.username_entry.focus()
             return False
-
+        pin = self.pin_entry.get().strip()
         if not pin or len(pin) != 4 or not pin.isdigit():
             messagebox.showerror("Validation Error", "PIN must be exactly 4 digits!")
-            self.pin_entry.focus()
             return False
-            
         return True
         
     def submit(self):
-        """Handle form submission"""
-        if not self.validate_inputs():
-            return
-            
+        if not self.validate_inputs(): return
         self.result = {
             'name': self.name_entry.get().strip(),
             'username': self.username_entry.get().strip(),
@@ -608,11 +258,18 @@ class AddUserDialog(ModernDialog):
             'role': self.role_var.get()
         }
         self.destroy()
-        
-    def cancel(self):
-        """Cancel and close dialog"""
-        self.result = None
-        self.destroy()
+
+class AddUserDialog(UserBaseDialog):
+    title_text = "Add New User"
+    submit_text = "Add User"
+    def __init__(self, parent):
+        super().__init__(parent, self.title_text)
+
+class EditUserDialog(UserBaseDialog):
+    title_text = "Edit User"
+    submit_text = "Save Changes"
+    def __init__(self, parent, user):
+        super().__init__(parent, self.title_text, user)
 
 
 class AddStockDialog(ModernDialog):
@@ -744,11 +401,6 @@ class AddStockDialog(ModernDialog):
             
         self.result = int(self.quantity_entry.get().strip())
         self.destroy()
-        
-    def cancel(self):
-        """Cancel and close dialog"""
-        self.result = None
-        self.destroy()
 
 
 class BrowseProductsDialog(ModernDialog):
@@ -877,7 +529,7 @@ class InvoiceDialog(ModernDialog):
             receipt_card, 
             fg_color="transparent", 
             text_color="#1E293B", # Dark Ink
-            font=("Consolas", 14),
+            font=(FONTS["mono"], 14),
             padx=20, pady=20
         )
         receipt_display.pack(fill="both", expand=True)
