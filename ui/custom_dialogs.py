@@ -375,11 +375,12 @@ class EditProductDialog(ModernDialog):
         self.destroy()
 
 
-class AddUserDialog(ModernDialog):
-    """Modern dialog for adding a new user"""
+class UserBaseDialog(ModernDialog):
+    """Base dialog for adding/editing users"""
     
-    def __init__(self, parent):
-        super().__init__(parent, "Add New User", width=600, height=680)
+    def __init__(self, parent, title, user_data=None):
+        super().__init__(parent, title, width=600, height=680)
+        self.user_data = user_data
         self.init_ui()
         
     def init_ui(self):
@@ -397,7 +398,7 @@ class AddUserDialog(ModernDialog):
         
         ctk.CTkLabel(
             header,
-            text=f"{ICONS['user']} Add New User",
+            text=f"{ICONS['user']} {self.title_text}",
             font=(FONTS["primary"], 20, "bold"),
             text_color=THEME_COLORS["text"]
         ).pack(side="left")
@@ -411,15 +412,6 @@ class AddUserDialog(ModernDialog):
         self.name_entry = self.last_entry
         
         # Username
-        self.create_input_field(form, "Username *", 1)
-        self.username_frame = self.last_container
-        self.username_entry = self.last_entry
-        
-        # Suggest Button
-        # Re-creating username field manually for custom layout with button
-        self.username_entry.destroy()
-        self.username_frame.destroy()
-        
         username_container = ctk.CTkFrame(form, fg_color="transparent")
         username_container.pack(fill="x", pady=8)
         
@@ -434,12 +426,10 @@ class AddUserDialog(ModernDialog):
             anchor="w"
         ).pack(side="left")
         
-        # Modern Suggest Button
         ctk.CTkButton(
             header_frame,
             text="✨ Suggest",
-            width=70,
-            height=24,
+            width=70, height=24,
             font=(FONTS["primary"], 11, "bold"),
             fg_color=THEME_COLORS["gradient_accent"],
             command=self.suggest_username
@@ -455,8 +445,6 @@ class AddUserDialog(ModernDialog):
             corner_radius=RADIUS["md"]
         )
         self.username_entry.pack(fill="x")
-        self.username_entry.bind("<FocusIn>", lambda e: self.username_entry.configure(border_color=THEME_COLORS["gradient_accent"]))
-        self.username_entry.bind("<FocusOut>", lambda e: self.username_entry.configure(border_color=THEME_COLORS["surface_light"]))
 
         # PIN
         self.create_input_field(form, "4-Digit PIN *", 2)
@@ -470,149 +458,75 @@ class AddUserDialog(ModernDialog):
             role_container,
             text="Role *",
             font=(FONTS["primary"], 14),
-            text_color=THEME_COLORS["text_secondary"],
-            anchor="w"
+            text_color=THEME_COLORS["text_secondary"]
         ).pack(anchor="w", pady=(0, 5))
         
         self.role_var = ctk.StringVar(value="cashier")
-        
         role_options = ctk.CTkFrame(role_container, fg_color=THEME_COLORS["surface"], corner_radius=RADIUS["md"])
         role_options.pack(fill="x")
         
-        roles = [
-            ("Admin", "admin"),
-            ("Manager", "manager"),
-            ("Cashier", "cashier"),
-            ("Stocker", "stocker")
-        ]
-        
-        for i, (label, value) in enumerate(roles):
-            rb = ctk.CTkRadioButton(
-                role_options,
-                text=label,
-                variable=self.role_var,
-                value=value,
-                font=(FONTS["primary"], 14),
-                fg_color=THEME_COLORS["gradient_mid"],
-                hover_color=THEME_COLORS["gradient_start"]
-            )
-            rb.pack(side="left", padx=10, pady=12)
-        
+        for r_label, r_val in [("Admin", "admin"), ("Manager", "manager"), ("Cashier", "cashier"), ("Stocker", "stocker")]:
+            ctk.CTkRadioButton(role_options, text=r_label, variable=self.role_var, value=r_val, font=(FONTS["primary"], 14)).pack(side="left", padx=10, pady=12)
+
+        # Prefill if editing
+        if self.user_data:
+            self.name_entry.insert(0, self.user_data['name'])
+            self.username_entry.insert(0, self.user_data.get('username', ''))
+            self.pin_entry.insert(0, self.user_data['pin'])
+            self.role_var.set(self.user_data['role'])
+
         # Buttons
         btn_frame = ctk.CTkFrame(main_card, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=(10, 20))
         
-        ctk.CTkButton(
-            btn_frame,
-            text=f"{ICONS['close']} Cancel",
-            width=120,
-            height=45,
-            fg_color="#334155",
-            hover_color="#475569",
-            corner_radius=RADIUS["md"],
-            font=(FONTS["primary"], 15, "bold"),
-            command=self.cancel
-        ).pack(side="right", padx=(10, 0))
+        ctk.CTkButton(btn_frame, text="Cancel", width=120, height=45, fg_color="#334155", command=self.destroy).pack(side="right", padx=(10, 0))
+        ctk.CTkButton(btn_frame, text=self.submit_text, width=150, height=45, fg_color="#059669", command=self.submit).pack(side="right")
         
-        ctk.CTkButton(
-            btn_frame,
-            text=f"{ICONS['check']} Add User",
-            width=150,
-            height=45,
-            fg_color="#059669",
-            hover_color="#047857",
-            corner_radius=RADIUS["md"],
-            font=(FONTS["primary"], 15, "bold"),
-            command=self.submit
-        ).pack(side="right")
-        
-        # Focus on first field
         self.name_entry.focus()
-        
+
     def create_input_field(self, parent, label, row):
-        """Helper to create labeled input field"""
         container = ctk.CTkFrame(parent, fg_color="transparent")
         container.pack(fill="x", pady=8)
-        
-        ctk.CTkLabel(
-            container,
-            text=label,
-            font=(FONTS["primary"], 14),
-            text_color=THEME_COLORS["text_secondary"],
-            anchor="w"
-        ).pack(anchor="w", pady=(0, 5))
-        
-        entry = ctk.CTkEntry(
-            container,
-            height=45,
-            font=(FONTS["primary"], 15),
-            fg_color=THEME_COLORS["surface"],
-            border_color=THEME_COLORS["surface_light"],
-            border_width=2,
-            corner_radius=RADIUS["md"]
-        )
+        ctk.CTkLabel(container, text=label, font=(FONTS["primary"], 14), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w", pady=(0, 5))
+        entry = ctk.CTkEntry(container, height=45, font=(FONTS["primary"], 15), fg_color=THEME_COLORS["surface"], border_color=THEME_COLORS["surface_light"], border_width=2, corner_radius=RADIUS["md"])
         entry.pack(fill="x")
         entry.bind("<FocusIn>", lambda e: entry.configure(border_color=THEME_COLORS["gradient_accent"]))
         entry.bind("<FocusOut>", lambda e: entry.configure(border_color=THEME_COLORS["surface_light"]))
-        
         self.last_entry = entry
-        self.last_container = container
 
     def suggest_username(self):
-        """Generate a suggested username"""
         name = self.name_entry.get().strip()
-        if not name:
-            messagebox.showinfo("Tip", "Enter a name first to get a suggestion!")
-            return
-            
-        import random
-        first_name = name.split()[0].lower()
-        random_num = random.randint(100, 999)
-        suggestion = f"{first_name}{random_num}"
-        
-        self.username_entry.delete(0, 'end')
-        self.username_entry.insert(0, suggestion)
-        
+        if name:
+            import random
+            suggestion = f"{name.split()[0].lower()}{random.randint(100, 999)}"
+            self.username_entry.delete(0, 'end')
+            self.username_entry.insert(0, suggestion)
+
     def validate_inputs(self):
-        """Validate form inputs"""
         name = self.name_entry.get().strip()
         username = self.username_entry.get().strip()
         pin = self.pin_entry.get().strip()
-        
-        if not name:
-            messagebox.showerror("Validation Error", "Full name is required!")
-            self.name_entry.focus()
+        if not (name and username and pin and len(pin) == 4 and pin.isdigit()):
+            messagebox.showerror("Validation Error", "All fields are required. PIN must be 4 digits.")
             return False
-            
-        if not username:
-            messagebox.showerror("Validation Error", "Username is required!")
-            self.username_entry.focus()
-            return False
-
-        if not pin or len(pin) != 4 or not pin.isdigit():
-            messagebox.showerror("Validation Error", "PIN must be exactly 4 digits!")
-            self.pin_entry.focus()
-            return False
-            
         return True
-        
+
     def submit(self):
-        """Handle form submission"""
-        if not self.validate_inputs():
-            return
-            
-        self.result = {
-            'name': self.name_entry.get().strip(),
-            'username': self.username_entry.get().strip(),
-            'pin': self.pin_entry.get().strip(),
-            'role': self.role_var.get()
-        }
-        self.destroy()
-        
-    def cancel(self):
-        """Cancel and close dialog"""
-        self.result = None
-        self.destroy()
+        if self.validate_inputs():
+            self.result = {'name': self.name_entry.get().strip(), 'username': self.username_entry.get().strip(), 'pin': self.pin_entry.get().strip(), 'role': self.role_var.get()}
+            self.destroy()
+
+class AddUserDialog(UserBaseDialog):
+    def __init__(self, parent):
+        self.title_text = "Add New User"
+        self.submit_text = "Add User"
+        super().__init__(parent, self.title_text)
+
+class EditUserDialog(UserBaseDialog):
+    def __init__(self, parent, user_data):
+        self.title_text = "Edit User"
+        self.submit_text = "Save Changes"
+        super().__init__(parent, self.title_text, user_data)
 
 
 class AddStockDialog(ModernDialog):
@@ -877,7 +791,7 @@ class InvoiceDialog(ModernDialog):
             receipt_card, 
             fg_color="transparent", 
             text_color="#1E293B", # Dark Ink
-            font=("Consolas", 14),
+            font=(FONTS["mono"], 14),
             padx=20, pady=20
         )
         receipt_display.pack(fill="both", expand=True)
