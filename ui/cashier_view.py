@@ -1,5 +1,7 @@
 import customtkinter as ctk
-from database import get_product_by_barcode, search_products, create_transaction
+from database import get_product_by_barcode, get_product_by_id, search_products, create_transaction, get_discount
+from printer_service import PrinterService
+from ui.custom_dialogs import BrowseProductsDialog, ManualEntryDialog, InvoiceDialog
 from tkinter import messagebox
 from styles import (
     THEME_COLORS, RADIUS, SPACING, FONTS, ICONS,
@@ -19,6 +21,7 @@ class CashierView(ctk.CTkFrame):
         """Clean up bindings before destruction"""
         try:
             self.winfo_toplevel().unbind("<space>")
+            self.winfo_toplevel().unbind("<Return>")
         except:
             pass
         super().destroy()
@@ -117,19 +120,30 @@ class CashierView(ctk.CTkFrame):
         btn_area = ctk.CTkFrame(controls_box, fg_color="transparent")
         btn_area.pack(side="left", fill="both", expand=True)
         
-        ctk.CTkLabel(btn_area, text="Product Selection", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w")
+        ctk.CTkLabel(btn_area, text="Quick Scan / Search", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w")
         btn_row = ctk.CTkFrame(btn_area, fg_color="transparent")
         btn_row.pack(fill="x", pady=(5, 0))
 
+        # Barcode entry for quick scan
+        self.barcode_entry = ctk.CTkEntry(
+            btn_row,
+            placeholder_text="Scan Barcode...",
+            width=200, height=45,
+            font=(FONTS["primary"], 15),
+            fg_color=THEME_COLORS["surface"]
+        )
+        self.barcode_entry.pack(side="left", padx=(0, 10))
+        self.barcode_entry.bind("<Return>", lambda e: self.on_barcode_scan())
+
         ctk.CTkButton(
             btn_row,
-            text=f"{ICONS['box']} Browse Inventory",
+            text=f"{ICONS['box']} Browse",
             font=(FONTS["primary"], 15, "bold"),
             fg_color=THEME_COLORS["gradient_mid"],
             hover_color=THEME_COLORS["gradient_start"],
-            height=45,
+            width=120, height=45,
             command=self.browse_products
-        ).pack(side="left", fill="x", expand=True, padx=(0, 10))
+        ).pack(side="left", padx=(0, 10))
 
         ctk.CTkButton(
             btn_row,
@@ -277,12 +291,23 @@ class CashierView(ctk.CTkFrame):
         except ValueError:
             self.change_label.configure(text="ERR", text_color=THEME_COLORS["danger"])
 
+    def on_barcode_scan(self):
+        barcode = self.barcode_entry.get().strip()
+        if not barcode:
+            return
+
+        product = get_product_by_barcode(barcode)
+        if product:
+            self.add_to_cart(product)
+            self.barcode_entry.delete(0, 'end')
+        else:
+            messagebox.showwarning("Not Found", f"No product found with barcode: {barcode}")
+
     def handle_discount(self):
         code = self.promo_entry.get().strip()
         if not code:
             return
             
-        from database import get_discount
         discount = get_discount(code)
         
         if not discount:
@@ -300,7 +325,6 @@ class CashierView(ctk.CTkFrame):
 
     def browse_products(self):
         """Show a quick inventory browser dialog"""
-        from ui.custom_dialogs import BrowseProductsDialog
         dialog = BrowseProductsDialog(self)
         product = dialog.get_result()
         if product:
@@ -308,7 +332,6 @@ class CashierView(ctk.CTkFrame):
 
     def manual_entry(self):
         """Show manual entry dialog"""
-        from ui.custom_dialogs import ManualEntryDialog
         dialog = ManualEntryDialog(self)
         product = dialog.get_result()
         if product:
@@ -325,6 +348,12 @@ class CashierView(ctk.CTkFrame):
         pass
 
     def add_to_cart(self, product):
+        # Refresh product data to get latest stock
+        if product['id'] > 0:
+            latest_product = get_product_by_id(product['id'])
+            if latest_product:
+                product = latest_product
+
         # Get multiplier
         try:
             multiplier = int(self.qty_multiply.get().strip() or "1")
@@ -383,6 +412,12 @@ class CashierView(ctk.CTkFrame):
 
         subtotal = 0
         total_items = 0
+
+        # Verify discount eligibility silently in display update
+        current_subtotal = sum(item['subtotal'] for item in self.cart)
+        if self.applied_discount and current_subtotal < self.applied_discount['min_amount']:
+            self.applied_discount = None
+
         for i, item in enumerate(self.cart):
             total_items += item['qty']
             # Dynamic Cart Item
@@ -435,7 +470,17 @@ class CashierView(ctk.CTkFrame):
 
     def remove_item(self, index):
         del self.cart[index]
-        if not self.cart: self.applied_discount = None
+
+        # Check if discount needs to be removed after item deletion
+        if self.applied_discount:
+            subtotal = sum(item['subtotal'] for item in self.cart)
+            if subtotal < self.applied_discount['min_amount']:
+                self.applied_discount = None
+                messagebox.showinfo("Discount Removed", "The applied discount has been removed because the subtotal is now below the minimum requirement.")
+
+        if not self.cart:
+            self.applied_discount = None
+
         self.update_cart_display()
 
     def clear_cart(self):
@@ -471,10 +516,6 @@ class CashierView(ctk.CTkFrame):
             messagebox.showwarning("Validation Error", "Please enter a valid amount in Cash Received.")
             return
 
-        from database import create_transaction
-        from printer_service import PrinterService
-        from ui.custom_dialogs import InvoiceDialog
-        
         try:
             tid = create_transaction(self.user['id'], self.cart, subtotal, discount_amt, total)
             
