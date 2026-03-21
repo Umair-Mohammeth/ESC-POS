@@ -78,11 +78,16 @@ def init_db():
     
     # Migration: Add discount columns if not exist
     try:
-        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
+        cursor.execute("SELECT subtotal FROM transactions LIMIT 1")
     except sqlite3.OperationalError:
         cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
+        print("Added subtotal column to transactions table.")
+
+    try:
+        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
+    except sqlite3.OperationalError:
         cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+        print("Added discount_amount column to transactions table.")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -155,6 +160,16 @@ def get_product_by_barcode(barcode):
         return dict(product)
     return None
 
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    if product:
+        return dict(product)
+    return None
+
 def search_products(query):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -180,6 +195,8 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     """
     import json
     conn = get_db_connection()
+    # Use IMMEDIATE transaction to lock database and prevent race conditions
+    conn.execute("BEGIN IMMEDIATE")
     cursor = conn.cursor()
     
     try:
