@@ -155,6 +155,16 @@ def get_product_by_barcode(barcode):
         return dict(product)
     return None
 
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    if product:
+        return dict(product)
+    return None
+
 def search_products(query):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -183,6 +193,9 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     cursor = conn.cursor()
     
     try:
+        # Start immediate transaction to prevent race conditions
+        cursor.execute("BEGIN IMMEDIATE")
+
         # Deduct stock
         for item in items:
             if item.get('id', 0) > 0:
@@ -276,18 +289,28 @@ def get_user_logs():
 def add_product(name, barcode, category, price, stock):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO products (name, barcode, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)", 
-                   (name, barcode, category, price, stock))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("INSERT INTO products (name, barcode, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)",
+                       (name, barcode, category, price, stock))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def update_product(id, name, barcode, category, price, stock):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE products SET name=?, barcode=?, category=?, price=?, stock_quantity=? WHERE id=?", 
-                   (name, barcode, category, price, stock, id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("UPDATE products SET name=?, barcode=?, category=?, price=?, stock_quantity=? WHERE id=?",
+                       (name, barcode, category, price, stock, id))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def delete_product(id):
     conn = get_db_connection()
@@ -308,16 +331,26 @@ def get_users():
 def add_user(name, username, pin, role):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, username, pin, role))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, username, pin, role))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def update_user(id, name, username, pin, role):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, username, pin, role, id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, username, pin, role, id))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def delete_user(id):
     conn = get_db_connection()
