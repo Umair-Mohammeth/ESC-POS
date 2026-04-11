@@ -76,13 +76,32 @@ def init_db():
     )
     ''')
     
-    # Migration: Add discount columns if not exist
-    try:
-        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
-    except sqlite3.OperationalError:
+    # Idempotent Migrations
+
+    # Check for columns in transactions
+    cursor.execute("PRAGMA table_info(transactions)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'subtotal' not in columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
+        print("Added subtotal column to transactions table.")
+    if 'discount_amount' not in columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+        print("Added discount_amount column to transactions table.")
+
+    # Check for columns in users
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'username' not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
+        print("Added username column to users table.")
+
+    # Check for columns in products
+    cursor.execute("PRAGMA table_info(products)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'category' not in columns:
+        cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
+        print("Added category column to products table.")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -94,27 +113,6 @@ def init_db():
         ]
         cursor.executemany("INSERT INTO discounts (code, type, value, min_amount) VALUES (?, ?, ?, ?)", discount_seeds)
         print("Sample discounts created.")
-    
-    # Migration: Add username column if not exists
-    try:
-        cursor.execute("SELECT username FROM users LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
-            print("Added username column to users table.")
-        except Exception as e:
-            print(f"Migration error (username): {e}")
-
-    # Migration: Add category column if not exists
-    try:
-        cursor.execute("SELECT category FROM products LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
-            print("Added category column to products table.")
-        except Exception as e:
-            print(f"Migration error (category): {e}")
     
     # Seed default users if empty
     cursor.execute("SELECT count(*) FROM users")
@@ -144,6 +142,14 @@ def init_db():
         
     conn.commit()
     conn.close()
+
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    return dict(product) if product else None
 
 def get_product_by_barcode(barcode):
     conn = get_db_connection()
@@ -183,6 +189,9 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     cursor = conn.cursor()
     
     try:
+        # Use IMMEDIATE transaction for stock deduction to prevent race conditions
+        cursor.execute("BEGIN IMMEDIATE")
+
         # Deduct stock
         for item in items:
             if item.get('id', 0) > 0:
@@ -276,18 +285,28 @@ def get_user_logs():
 def add_product(name, barcode, category, price, stock):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO products (name, barcode, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)", 
-                   (name, barcode, category, price, stock))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("INSERT INTO products (name, barcode, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)",
+                       (name, barcode, category, price, stock))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def update_product(id, name, barcode, category, price, stock):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE products SET name=?, barcode=?, category=?, price=?, stock_quantity=? WHERE id=?", 
-                   (name, barcode, category, price, stock, id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("UPDATE products SET name=?, barcode=?, category=?, price=?, stock_quantity=? WHERE id=?",
+                       (name, barcode, category, price, stock, id))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def delete_product(id):
     conn = get_db_connection()
@@ -308,16 +327,26 @@ def get_users():
 def add_user(name, username, pin, role):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, username, pin, role))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, username, pin, role))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def update_user(id, name, username, pin, role):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, username, pin, role, id))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, username, pin, role, id))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
 
 def delete_user(id):
     conn = get_db_connection()
