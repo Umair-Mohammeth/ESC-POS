@@ -76,13 +76,19 @@ def init_db():
     )
     ''')
     
-    # Migration: Add discount columns if not exist
-    try:
-        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
-    except sqlite3.OperationalError:
-        cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
-        cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+    # Migration: Add columns individually if not exists
+    def add_column_if_not_exists(table, column, definition):
+        cursor.execute(f"PRAGMA table_info({table})")
+        columns = [row[1] for row in cursor.fetchall()]
+        if column not in columns:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            print(f"Added column {column} to table {table}.")
+
+    add_column_if_not_exists("transactions", "subtotal", "REAL DEFAULT 0")
+    add_column_if_not_exists("transactions", "discount_amount", "REAL DEFAULT 0")
+    add_column_if_not_exists("users", "username", "TEXT")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
+    add_column_if_not_exists("products", "category", "TEXT DEFAULT 'General'")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -94,27 +100,6 @@ def init_db():
         ]
         cursor.executemany("INSERT INTO discounts (code, type, value, min_amount) VALUES (?, ?, ?, ?)", discount_seeds)
         print("Sample discounts created.")
-    
-    # Migration: Add username column if not exists
-    try:
-        cursor.execute("SELECT username FROM users LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
-            print("Added username column to users table.")
-        except Exception as e:
-            print(f"Migration error (username): {e}")
-
-    # Migration: Add category column if not exists
-    try:
-        cursor.execute("SELECT category FROM products LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
-            print("Added category column to products table.")
-        except Exception as e:
-            print(f"Migration error (category): {e}")
     
     # Seed default users if empty
     cursor.execute("SELECT count(*) FROM users")
@@ -155,6 +140,16 @@ def get_product_by_barcode(barcode):
         return dict(product)
     return None
 
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    if product:
+        return dict(product)
+    return None
+
 def search_products(query):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -180,6 +175,8 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     """
     import json
     conn = get_db_connection()
+    # Use IMMEDIATE to lock the database for writes from the start
+    conn.execute("BEGIN IMMEDIATE")
     cursor = conn.cursor()
     
     try:
