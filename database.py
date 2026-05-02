@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import json
 from datetime import datetime
 
 DB_NAME = "pos_system.db"
@@ -77,12 +78,14 @@ def init_db():
     ''')
     
     # Migration: Add discount columns if not exist
-    try:
-        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
-    except sqlite3.OperationalError:
+    cursor.execute("PRAGMA table_info(transactions)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'subtotal' not in columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
+        print("Added subtotal column to transactions table.")
+    if 'discount_amount' not in columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+        print("Added discount_amount column to transactions table.")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -96,9 +99,9 @@ def init_db():
         print("Sample discounts created.")
     
     # Migration: Add username column if not exists
-    try:
-        cursor.execute("SELECT username FROM users LIMIT 1")
-    except sqlite3.OperationalError:
+    cursor.execute("PRAGMA table_info(users)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'username' not in columns:
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
@@ -107,9 +110,9 @@ def init_db():
             print(f"Migration error (username): {e}")
 
     # Migration: Add category column if not exists
-    try:
-        cursor.execute("SELECT category FROM products LIMIT 1")
-    except sqlite3.OperationalError:
+    cursor.execute("PRAGMA table_info(products)")
+    columns = [column[1] for column in cursor.fetchall()]
+    if 'category' not in columns:
         try:
             cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
             print("Added category column to products table.")
@@ -155,6 +158,16 @@ def get_product_by_barcode(barcode):
         return dict(product)
     return None
 
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    if product:
+        return dict(product)
+    return None
+
 def search_products(query):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -178,7 +191,6 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     items: list of dicts {id, name, price, qty}
     Returns transaction_id or raises Exception
     """
-    import json
     conn = get_db_connection()
     cursor = conn.cursor()
     
