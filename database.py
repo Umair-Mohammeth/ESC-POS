@@ -16,6 +16,10 @@ def init_db():
     # Enable foreign keys
     cursor.execute("PRAGMA foreign_keys = ON")
     
+    def column_exists(table, column):
+        cursor.execute(f"PRAGMA table_info({table})")
+        return any(row['name'] == column for row in cursor.fetchall())
+
     # Users Table
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS users (
@@ -77,12 +81,13 @@ def init_db():
     ''')
     
     # Migration: Add discount columns if not exist
-    try:
-        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
-    except sqlite3.OperationalError:
+    if not column_exists('transactions', 'subtotal'):
         cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
+        print("Added subtotal column to transactions.")
+
+    if not column_exists('transactions', 'discount_amount'):
         cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+        print("Added discount_amount column to transactions.")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -96,25 +101,15 @@ def init_db():
         print("Sample discounts created.")
     
     # Migration: Add username column if not exists
-    try:
-        cursor.execute("SELECT username FROM users LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
-            print("Added username column to users table.")
-        except Exception as e:
-            print(f"Migration error (username): {e}")
+    if not column_exists('users', 'username'):
+        cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
+        print("Added username column to users table.")
 
     # Migration: Add category column if not exists
-    try:
-        cursor.execute("SELECT category FROM products LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
-            print("Added category column to products table.")
-        except Exception as e:
-            print(f"Migration error (category): {e}")
+    if not column_exists('products', 'category'):
+        cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
+        print("Added category column to products table.")
     
     # Seed default users if empty
     cursor.execute("SELECT count(*) FROM users")
@@ -155,6 +150,14 @@ def get_product_by_barcode(barcode):
         return dict(product)
     return None
 
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    return dict(product) if product else None
+
 def search_products(query):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -180,6 +183,8 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     """
     import json
     conn = get_db_connection()
+    # Use IMMEDIATE transaction to lock the database for writing immediately
+    conn.execute("BEGIN IMMEDIATE")
     cursor = conn.cursor()
     
     try:
