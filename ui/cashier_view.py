@@ -1,5 +1,7 @@
 import customtkinter as ctk
-from database import get_product_by_barcode, search_products, create_transaction
+from database import get_product_by_barcode, search_products, create_transaction, get_product_by_id, get_discount
+from printer_service import PrinterService
+from ui.custom_dialogs import BrowseProductsDialog, ManualEntryDialog, InvoiceDialog
 from tkinter import messagebox
 from styles import (
     THEME_COLORS, RADIUS, SPACING, FONTS, ICONS,
@@ -19,6 +21,7 @@ class CashierView(ctk.CTkFrame):
         """Clean up bindings before destruction"""
         try:
             self.winfo_toplevel().unbind("<space>")
+            self.winfo_toplevel().unbind("<Return>")
         except:
             pass
         super().destroy()
@@ -108,10 +111,13 @@ class CashierView(ctk.CTkFrame):
             qty_box, width=120, height=45, 
             font=(FONTS["primary"], 18, "bold"), 
             justify="center",
-            fg_color=THEME_COLORS["surface"]
+            fg_color=THEME_COLORS["surface"],
+            border_color=THEME_COLORS["surface_light"]
         )
         self.qty_multiply.pack(pady=(5, 0))
         self.qty_multiply.insert(0, "1")
+        self.qty_multiply.bind("<FocusIn>", lambda e: self.qty_multiply.configure(border_color=THEME_COLORS["gradient_accent"]))
+        self.qty_multiply.bind("<FocusOut>", lambda e: self.qty_multiply.configure(border_color=THEME_COLORS["surface_light"]))
 
         # Action Buttons
         btn_area = ctk.CTkFrame(controls_box, fg_color="transparent")
@@ -202,9 +208,11 @@ class CashierView(ctk.CTkFrame):
         paid_row = ctk.CTkFrame(summary_content, fg_color="transparent")
         paid_row.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(paid_row, text="Cash Received", font=(FONTS["primary"], 14)).pack(side="left")
-        self.paid_entry = ctk.CTkEntry(paid_row, width=120, height=40, font=(FONTS["primary"], 18, "bold"), justify="right", fg_color=THEME_COLORS["background"], border_width=1)
+        self.paid_entry = ctk.CTkEntry(paid_row, width=120, height=40, font=(FONTS["primary"], 18, "bold"), justify="right", fg_color=THEME_COLORS["background"], border_width=2, border_color=THEME_COLORS["surface_light"])
         self.paid_entry.pack(side="right")
         self.paid_entry.bind("<KeyRelease>", lambda e: self.update_change_due())
+        self.paid_entry.bind("<FocusIn>", lambda e: self.paid_entry.configure(border_color=THEME_COLORS["gradient_accent"]))
+        self.paid_entry.bind("<FocusOut>", lambda e: self.paid_entry.configure(border_color=THEME_COLORS["surface_light"]))
         
         change_row = ctk.CTkFrame(summary_content, fg_color="transparent")
         change_row.pack(fill="x")
@@ -222,15 +230,17 @@ class CashierView(ctk.CTkFrame):
         promo_box = ctk.CTkFrame(promo_card, fg_color="transparent")
         promo_box.pack(fill="x", padx=15, pady=10)
         
-        self.promo_entry = ctk.CTkEntry(promo_box, placeholder_text="Discount Code", font=(FONTS["primary"], 13), height=40, fg_color=THEME_COLORS["background"], border_width=0)
+        self.promo_entry = ctk.CTkEntry(promo_box, placeholder_text="Discount Code", font=(FONTS["primary"], 13), height=40, fg_color=THEME_COLORS["background"], border_width=2, border_color=THEME_COLORS["surface_light"])
         self.promo_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.promo_entry.bind("<FocusIn>", lambda e: self.promo_entry.configure(border_color=THEME_COLORS["gradient_accent"]))
+        self.promo_entry.bind("<FocusOut>", lambda e: self.promo_entry.configure(border_color=THEME_COLORS["surface_light"]))
         
         ctk.CTkButton(promo_box, text="Apply", width=70, height=40, fg_color=THEME_COLORS["info"], font=(FONTS["primary"], 12, "bold"), command=self.handle_discount).pack(side="right")
 
         # 3. Checkout Buttons
         self.pay_btn = ctk.CTkButton(
             right_actions,
-            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Spacebar)",
+            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Enter/Space)",
             height=100,
             font=(FONTS["primary"], 22, "bold"),
             fg_color=THEME_COLORS["success"],
@@ -255,6 +265,7 @@ class CashierView(ctk.CTkFrame):
 
         self.qty_multiply.focus_set()
         self.after(10, lambda: self.winfo_toplevel().bind("<space>", self.on_space_press))
+        self.after(10, lambda: self.winfo_toplevel().bind("<Return>", self.on_space_press))
 
     def update_change_due(self):
         """Calculate and display change based on cash received"""
@@ -282,7 +293,6 @@ class CashierView(ctk.CTkFrame):
         if not code:
             return
             
-        from database import get_discount
         discount = get_discount(code)
         
         if not discount:
@@ -300,7 +310,6 @@ class CashierView(ctk.CTkFrame):
 
     def browse_products(self):
         """Show a quick inventory browser dialog"""
-        from ui.custom_dialogs import BrowseProductsDialog
         dialog = BrowseProductsDialog(self)
         product = dialog.get_result()
         if product:
@@ -308,7 +317,6 @@ class CashierView(ctk.CTkFrame):
 
     def manual_entry(self):
         """Show manual entry dialog"""
-        from ui.custom_dialogs import ManualEntryDialog
         dialog = ManualEntryDialog(self)
         product = dialog.get_result()
         if product:
@@ -325,6 +333,12 @@ class CashierView(ctk.CTkFrame):
         pass
 
     def add_to_cart(self, product):
+        # Re-fetch product data for latest stock if it's a real product
+        if product.get('id', 0) > 0:
+            fresh_product = get_product_by_id(product['id'])
+            if fresh_product:
+                product = fresh_product
+
         # Get multiplier
         try:
             multiplier = int(self.qty_multiply.get().strip() or "1")
@@ -471,10 +485,6 @@ class CashierView(ctk.CTkFrame):
             messagebox.showwarning("Validation Error", "Please enter a valid amount in Cash Received.")
             return
 
-        from database import create_transaction
-        from printer_service import PrinterService
-        from ui.custom_dialogs import InvoiceDialog
-        
         try:
             tid = create_transaction(self.user['id'], self.cart, subtotal, discount_amt, total)
             
