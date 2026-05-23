@@ -30,6 +30,13 @@ class TestDatabase(unittest.TestCase):
         self.assertGreater(cursor.fetchone()[0], 0)
         conn.close()
 
+    def test_get_product_by_id(self):
+        products = database.get_all_products()
+        p1 = products[0]
+        p2 = database.get_product_by_id(p1['id'])
+        self.assertEqual(p1['name'], p2['name'])
+        self.assertEqual(p1['id'], p2['id'])
+
     def test_create_transaction(self):
         products = database.get_all_products()
         p = products[0]
