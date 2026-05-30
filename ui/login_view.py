@@ -1,6 +1,7 @@
 import customtkinter as ctk
 from auth import verify_pin
 from tkinter import messagebox
+from database import log_user_action
 from styles import (
     THEME_COLORS, RADIUS, SPACING, FONTS, ICONS,
     create_glass_frame, create_gradient_label
@@ -153,7 +154,7 @@ class LoginView(ctk.CTkFrame):
             self.pin_input.delete(0, 'end')
         else:
             current = self.pin_input.get()
-            if len(current) < 6:  # Limit PIN length
+            if len(current) < 4:  # PIN length limited to 4
                 self.pin_input.insert('end', char)
 
     def verify_login(self):
@@ -167,7 +168,6 @@ class LoginView(ctk.CTkFrame):
             # Success feedback
             self.pin_input.configure(border_color=THEME_COLORS["success"])
             # Log login action
-            from database import log_user_action
             log_user_action(user['id'], "LOGIN")
             
             self.master.after(200, lambda: self.on_login_success(user))
