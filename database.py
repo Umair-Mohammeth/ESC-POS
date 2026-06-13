@@ -7,6 +7,7 @@ DB_NAME = "pos_system.db"
 def get_db_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 def init_db():
@@ -155,6 +156,14 @@ def get_product_by_barcode(barcode):
         return dict(product)
     return None
 
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    return dict(product) if product else None
+
 def search_products(query):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -183,6 +192,8 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     cursor = conn.cursor()
     
     try:
+        cursor.execute("BEGIN IMMEDIATE")
+
         # Deduct stock
         for item in items:
             if item.get('id', 0) > 0:
