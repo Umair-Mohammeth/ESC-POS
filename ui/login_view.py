@@ -153,7 +153,7 @@ class LoginView(ctk.CTkFrame):
             self.pin_input.delete(0, 'end')
         else:
             current = self.pin_input.get()
-            if len(current) < 6:  # Limit PIN length
+            if len(current) < 4:  # Limit PIN length to 4 digits
                 self.pin_input.insert('end', char)
 
     def verify_login(self):
