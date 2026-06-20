@@ -5,16 +5,15 @@ from datetime import datetime
 DB_NAME = "pos_system.db"
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB_NAME, isolation_level='IMMEDIATE')
     conn.row_factory = sqlite3.Row
+    # Enable foreign keys for every connection
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Enable foreign keys
-    cursor.execute("PRAGMA foreign_keys = ON")
     
     # Users Table
     cursor.execute('''
@@ -76,13 +75,32 @@ def init_db():
     )
     ''')
     
-    # Migration: Add discount columns if not exist
-    try:
-        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
-    except sqlite3.OperationalError:
+    # Migration: Add columns individually if they don't exist
+
+    # Transactions table migrations
+    cursor.execute("PRAGMA table_info(transactions)")
+    trans_columns = [column[1] for column in cursor.fetchall()]
+    if "subtotal" not in trans_columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
+        print("Added subtotal column to transactions.")
+    if "discount_amount" not in trans_columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
+        print("Added discount_amount column to transactions.")
+
+    # Users table migrations
+    cursor.execute("PRAGMA table_info(users)")
+    user_columns = [column[1] for column in cursor.fetchall()]
+    if "username" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
+        print("Added username column to users table.")
+
+    # Products table migrations
+    cursor.execute("PRAGMA table_info(products)")
+    prod_columns = [column[1] for column in cursor.fetchall()]
+    if "category" not in prod_columns:
+        cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
+        print("Added category column to products table.")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -94,27 +112,6 @@ def init_db():
         ]
         cursor.executemany("INSERT INTO discounts (code, type, value, min_amount) VALUES (?, ?, ?, ?)", discount_seeds)
         print("Sample discounts created.")
-    
-    # Migration: Add username column if not exists
-    try:
-        cursor.execute("SELECT username FROM users LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
-            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username)")
-            print("Added username column to users table.")
-        except Exception as e:
-            print(f"Migration error (username): {e}")
-
-    # Migration: Add category column if not exists
-    try:
-        cursor.execute("SELECT category FROM products LIMIT 1")
-    except sqlite3.OperationalError:
-        try:
-            cursor.execute("ALTER TABLE products ADD COLUMN category TEXT DEFAULT 'General'")
-            print("Added category column to products table.")
-        except Exception as e:
-            print(f"Migration error (category): {e}")
     
     # Seed default users if empty
     cursor.execute("SELECT count(*) FROM users")
@@ -154,6 +151,14 @@ def get_product_by_barcode(barcode):
     if product:
         return dict(product)
     return None
+
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    return dict(product) if product else None
 
 def search_products(query):
     conn = get_db_connection()
