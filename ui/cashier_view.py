@@ -1,5 +1,12 @@
 import customtkinter as ctk
-from database import get_product_by_barcode, search_products, create_transaction
+from database import (
+    get_product_by_barcode, search_products, create_transaction,
+    get_discount, get_product_by_id
+)
+from printer_service import PrinterService
+from ui.custom_dialogs import (
+    BrowseProductsDialog, ManualEntryDialog, InvoiceDialog
+)
 from tkinter import messagebox
 from styles import (
     THEME_COLORS, RADIUS, SPACING, FONTS, ICONS,
@@ -18,7 +25,9 @@ class CashierView(ctk.CTkFrame):
     def destroy(self):
         """Clean up bindings before destruction"""
         try:
-            self.winfo_toplevel().unbind("<space>")
+            top = self.winfo_toplevel()
+            top.unbind("<space>")
+            top.unbind("<Return>")
         except:
             pass
         super().destroy()
@@ -99,31 +108,45 @@ class CashierView(ctk.CTkFrame):
         controls_box = ctk.CTkFrame(controls_card, fg_color="transparent")
         controls_box.pack(fill="x", padx=15, pady=15)
 
-        # Multiplier field (Add amount of item)
+        # Barcode Entry for scanning
+        barcode_box = ctk.CTkFrame(controls_box, fg_color="transparent")
+        barcode_box.pack(side="left", padx=(0, 20))
+        ctk.CTkLabel(barcode_box, text="Scan Barcode", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w")
+        self.barcode_entry = ctk.CTkEntry(
+            barcode_box, width=180, height=45,
+            placeholder_text="Scan here...",
+            fg_color=THEME_COLORS["surface"]
+        )
+        self.barcode_entry.pack(pady=(5, 0))
+        self.barcode_entry.bind("<Return>", self.on_barcode_scan)
+        self.barcode_entry.bind("<FocusIn>", lambda e: self.barcode_entry.configure(border_color=THEME_COLORS["gradient_accent"]))
+        self.barcode_entry.bind("<FocusOut>", lambda e: self.barcode_entry.configure(border_color=THEME_COLORS["surface_light"]))
+
+        # Multiplier field
         qty_box = ctk.CTkFrame(controls_box, fg_color="transparent")
         qty_box.pack(side="left", padx=(0, 20))
-        
-        ctk.CTkLabel(qty_box, text="Quantity Multiplier", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w")
+        ctk.CTkLabel(qty_box, text="Qty Multiplier", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w")
         self.qty_multiply = ctk.CTkEntry(
-            qty_box, width=120, height=45, 
+            qty_box, width=100, height=45,
             font=(FONTS["primary"], 18, "bold"), 
             justify="center",
             fg_color=THEME_COLORS["surface"]
         )
         self.qty_multiply.pack(pady=(5, 0))
         self.qty_multiply.insert(0, "1")
+        self.qty_multiply.bind("<FocusIn>", lambda e: self.qty_multiply.configure(border_color=THEME_COLORS["gradient_accent"]))
+        self.qty_multiply.bind("<FocusOut>", lambda e: self.qty_multiply.configure(border_color=THEME_COLORS["surface_light"]))
 
         # Action Buttons
         btn_area = ctk.CTkFrame(controls_box, fg_color="transparent")
         btn_area.pack(side="left", fill="both", expand=True)
-        
-        ctk.CTkLabel(btn_area, text="Product Selection", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w")
+        ctk.CTkLabel(btn_area, text="Inventory", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_secondary"]).pack(anchor="w")
         btn_row = ctk.CTkFrame(btn_area, fg_color="transparent")
         btn_row.pack(fill="x", pady=(5, 0))
 
         ctk.CTkButton(
             btn_row,
-            text=f"{ICONS['box']} Browse Inventory",
+            text=f"{ICONS['box']} Browse",
             font=(FONTS["primary"], 15, "bold"),
             fg_color=THEME_COLORS["gradient_mid"],
             hover_color=THEME_COLORS["gradient_start"],
@@ -133,11 +156,11 @@ class CashierView(ctk.CTkFrame):
 
         ctk.CTkButton(
             btn_row,
-            text=f"{ICONS['settings']} Custom Entry",
+            text=f"{ICONS['settings']} Manual",
             font=(FONTS["primary"], 15),
             fg_color=THEME_COLORS["surface"],
             hover_color=THEME_COLORS["surface_light"],
-            width=140, height=45,
+            width=100, height=45,
             command=self.manual_entry
         ).pack(side="left")
 
@@ -196,7 +219,7 @@ class CashierView(ctk.CTkFrame):
         self.total_label = ctk.CTkLabel(total_row, text="$0.00", font=(FONTS["primary"], 40, "bold"), text_color=THEME_COLORS["gradient_start"])
         self.total_label.pack(side="right")
 
-        # Paid & Change (Add amount of item logic)
+        # Paid & Change
         ctk.CTkFrame(summary_content, height=1, fg_color=THEME_COLORS["surface"]).pack(fill="x", pady=15)
         
         paid_row = ctk.CTkFrame(summary_content, fg_color="transparent")
@@ -205,6 +228,8 @@ class CashierView(ctk.CTkFrame):
         self.paid_entry = ctk.CTkEntry(paid_row, width=120, height=40, font=(FONTS["primary"], 18, "bold"), justify="right", fg_color=THEME_COLORS["background"], border_width=1)
         self.paid_entry.pack(side="right")
         self.paid_entry.bind("<KeyRelease>", lambda e: self.update_change_due())
+        self.paid_entry.bind("<FocusIn>", lambda e: self.paid_entry.configure(border_color=THEME_COLORS["gradient_accent"]))
+        self.paid_entry.bind("<FocusOut>", lambda e: self.paid_entry.configure(border_color=THEME_COLORS["surface_light"]))
         
         change_row = ctk.CTkFrame(summary_content, fg_color="transparent")
         change_row.pack(fill="x")
@@ -224,13 +249,15 @@ class CashierView(ctk.CTkFrame):
         
         self.promo_entry = ctk.CTkEntry(promo_box, placeholder_text="Discount Code", font=(FONTS["primary"], 13), height=40, fg_color=THEME_COLORS["background"], border_width=0)
         self.promo_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.promo_entry.bind("<FocusIn>", lambda e: self.promo_entry.configure(border_color=THEME_COLORS["gradient_accent"]))
+        self.promo_entry.bind("<FocusOut>", lambda e: self.promo_entry.configure(border_color="transparent"))
         
         ctk.CTkButton(promo_box, text="Apply", width=70, height=40, fg_color=THEME_COLORS["info"], font=(FONTS["primary"], 12, "bold"), command=self.handle_discount).pack(side="right")
 
         # 3. Checkout Buttons
         self.pay_btn = ctk.CTkButton(
             right_actions,
-            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Spacebar)",
+            text=f"{ICONS['money']} COMPLETE PAYMENT\n(Space or Enter)",
             height=100,
             font=(FONTS["primary"], 22, "bold"),
             fg_color=THEME_COLORS["success"],
@@ -253,11 +280,37 @@ class CashierView(ctk.CTkFrame):
             command=self.clear_cart
         ).pack(fill="x")
 
-        self.qty_multiply.focus_set()
-        self.after(10, lambda: self.winfo_toplevel().bind("<space>", self.on_space_press))
+        # Initial focus
+        self.barcode_entry.focus_set()
+
+        # Bind global shortcuts
+        self.after(10, self.bind_shortcuts)
+
+    def bind_shortcuts(self):
+        top = self.winfo_toplevel()
+        top.bind("<space>", self.on_payment_shortcut)
+        top.bind("<Return>", self.on_payment_shortcut)
+
+    def on_payment_shortcut(self, event):
+        # Prevent triggering while typing in inputs
+        focused = str(self.focus_get())
+        inputs = [str(self.barcode_entry), str(self.qty_multiply), str(self.promo_entry), str(self.paid_entry)]
+        if focused not in inputs:
+            self.process_payment()
+
+    def on_barcode_scan(self, event):
+        barcode = self.barcode_entry.get().strip()
+        if not barcode: return
+
+        product = get_product_by_barcode(barcode)
+        if product:
+            self.add_to_cart(product)
+            self.barcode_entry.delete(0, 'end')
+        else:
+            messagebox.showerror("Not Found", f"Product with barcode '{barcode}' not found.")
+            self.barcode_entry.delete(0, 'end')
 
     def update_change_due(self):
-        """Calculate and display change based on cash received"""
         try:
             total_text = self.total_label.cget("text").replace("$", "")
             grand_total = float(total_text)
@@ -269,22 +322,18 @@ class CashierView(ctk.CTkFrame):
                 
             paid_amount = float(paid_text)
             change = paid_amount - grand_total
-            
-            if change < 0:
-                self.change_label.configure(text=f"-${abs(change):.2f}", text_color=THEME_COLORS["danger"])
-            else:
-                self.change_label.configure(text=f"${change:.2f}", text_color=THEME_COLORS["info"])
+            self.change_label.configure(
+                text=f"{'-' if change < 0 else ''}${abs(change):.2f}",
+                text_color=THEME_COLORS["danger"] if change < 0 else THEME_COLORS["info"]
+            )
         except ValueError:
             self.change_label.configure(text="ERR", text_color=THEME_COLORS["danger"])
 
     def handle_discount(self):
         code = self.promo_entry.get().strip()
-        if not code:
-            return
+        if not code: return
             
-        from database import get_discount
         discount = get_discount(code)
-        
         if not discount:
             messagebox.showerror("Invalid Code", "This promotion code does not exist or is expired.")
             return
@@ -299,33 +348,22 @@ class CashierView(ctk.CTkFrame):
         self.update_cart_display()
 
     def browse_products(self):
-        """Show a quick inventory browser dialog"""
-        from ui.custom_dialogs import BrowseProductsDialog
         dialog = BrowseProductsDialog(self)
         product = dialog.get_result()
-        if product:
-            self.add_to_cart(product)
+        if product: self.add_to_cart(product)
 
     def manual_entry(self):
-        """Show manual entry dialog"""
-        from ui.custom_dialogs import ManualEntryDialog
         dialog = ManualEntryDialog(self)
         product = dialog.get_result()
-        if product:
-            self.add_to_cart(product)
-
-    def on_space_press(self, event):
-        # Trigger payment if cart is not empty and not typing in entry fields
-        focused = str(self.focus_get())
-        if self.cart and focused not in [str(self.qty_multiply), str(self.promo_entry), str(self.paid_entry)]:
-            self.process_payment()
-
-    def handle_search(self):
-        # Entry removed - this is a fallback or for barcode scan bypass if needed
-        pass
+        if product: self.add_to_cart(product)
 
     def add_to_cart(self, product):
-        # Get multiplier
+        # Re-fetch product to ensure current stock data
+        if product.get('id', 0) > 0:
+            current_product = get_product_by_id(product['id'])
+            if current_product:
+                product = current_product
+
         try:
             multiplier = int(self.qty_multiply.get().strip() or "1")
             if multiplier <= 0: multiplier = 1
@@ -337,7 +375,6 @@ class CashierView(ctk.CTkFrame):
             return
 
         for item in self.cart:
-            # Merge if same product ID (>0) OR if it's a manual entry (ID=0) with same name and price
             is_same_product = (item['id'] == product['id'] and item['id'] > 0)
             is_same_manual = (item['id'] == 0 and product.get('id') == 0 and
                              item['name'] == product['name'] and
@@ -372,36 +409,25 @@ class CashierView(ctk.CTkFrame):
 
         if not self.cart:
             ctk.CTkLabel(self.cart_frame, text="Select items to begin transaction...", font=(FONTS["primary"], 16), text_color=THEME_COLORS["text_muted"]).pack(pady=60)
-            self.subtotal_label.configure(text="$0.00")
-            self.discount_label.configure(text="-$0.00")
-            self.total_label.configure(text="$0.00")
-            self.cart_title.configure(text=f"{ICONS['cart']} Current Order (0 Items)")
-            self.count_label.configure(text="0 Items Selected")
-            self.applied_discount = None
-            self.update_change_due()
+            self.reset_summary()
             return
 
-        subtotal = 0
-        total_items = 0
+        subtotal = sum(item['subtotal'] for item in self.cart)
+        total_items = sum(item['qty'] for item in self.cart)
+
         for i, item in enumerate(self.cart):
-            total_items += item['qty']
-            # Dynamic Cart Item
             card = ctk.CTkFrame(self.cart_frame, fg_color=THEME_COLORS["surface"], corner_radius=RADIUS["sm"])
             card.pack(fill="x", pady=2, padx=5)
-            
             content = ctk.CTkFrame(card, fg_color="transparent")
             content.pack(fill="x", padx=15, pady=10)
             
-            # Left: Info
             info = ctk.CTkFrame(content, fg_color="transparent")
             info.pack(side="left", fill="both", expand=True)
             ctk.CTkLabel(info, text=item['name'], font=(FONTS["primary"], 15, "bold"), anchor="w").pack(anchor="w")
             ctk.CTkLabel(info, text=f"{item['category']} • ${item['price']:.2f}/ea", font=(FONTS["primary"], 12), text_color=THEME_COLORS["text_secondary"], anchor="w").pack(anchor="w")
             
-            # Right: Qty & Price
             pricing = ctk.CTkFrame(content, fg_color="transparent")
             pricing.pack(side="right")
-            
             ctk.CTkLabel(pricing, text=f"x{item['qty']}", font=(FONTS["primary"], 14, "bold"), width=40).pack(side="left", padx=10)
             ctk.CTkLabel(pricing, text=f"${item['subtotal']:.2f}", font=(FONTS["primary"], 16, "bold"), text_color=THEME_COLORS["gradient_accent"]).pack(side="left", padx=10)
             
@@ -411,14 +437,12 @@ class CashierView(ctk.CTkFrame):
                 text_color="#9ca3af",
                 command=lambda x=i: self.remove_item(x)
             ).pack(side="left")
-            
-            subtotal += item['subtotal']
 
-        # Update Headers
-        self.cart_title.configure(text=f"{ICONS['cart']} Current Order ({total_items} Items)")
-        self.count_label.configure(text=f"{total_items} Items Selected")
+        # Verify discount eligibility
+        if self.applied_discount and subtotal < self.applied_discount['min_amount']:
+            # Silent removal or alert during explicit removal
+            self.applied_discount = None
 
-        # Calculation
         discount_amt = 0
         if self.applied_discount:
             if self.applied_discount['type'] == 'percentage':
@@ -428,14 +452,33 @@ class CashierView(ctk.CTkFrame):
 
         total = max(0, subtotal - discount_amt)
         
+        self.cart_title.configure(text=f"{ICONS['cart']} Current Order ({total_items} Items)")
+        self.count_label.configure(text=f"{total_items} Items Selected")
         self.subtotal_label.configure(text=f"${subtotal:.2f}")
         self.discount_label.configure(text=f"-${discount_amt:.2f}")
         self.total_label.configure(text=f"${total:.2f}")
         self.update_change_due()
 
+    def reset_summary(self):
+        self.subtotal_label.configure(text="$0.00")
+        self.discount_label.configure(text="-$0.00")
+        self.total_label.configure(text="$0.00")
+        self.cart_title.configure(text=f"{ICONS['cart']} Current Order (0 Items)")
+        self.count_label.configure(text="0 Items Selected")
+        self.applied_discount = None
+        self.update_change_due()
+
     def remove_item(self, index):
+        item_name = self.cart[index]['name']
         del self.cart[index]
-        if not self.cart: self.applied_discount = None
+
+        # If cart was updated, re-check discount
+        if self.applied_discount:
+            subtotal = sum(i['subtotal'] for i in self.cart)
+            if subtotal < self.applied_discount['min_amount']:
+                self.applied_discount = None
+                messagebox.showinfo("Discount Removed", f"Minimum subtotal of ${self.applied_discount['min_amount'] if hasattr(self, 'applied_discount') and self.applied_discount else 0} not met.")
+
         self.update_cart_display()
 
     def clear_cart(self):
@@ -447,8 +490,7 @@ class CashierView(ctk.CTkFrame):
             self.update_cart_display()
 
     def process_payment(self):
-        if not self.cart:
-            return
+        if not self.cart: return
             
         subtotal = sum(i['subtotal'] for i in self.cart)
         discount_amt = 0
@@ -460,7 +502,6 @@ class CashierView(ctk.CTkFrame):
         
         total = max(0, subtotal - discount_amt)
         
-        # Check if paid amount is sufficient
         try:
             paid = float(self.paid_entry.get().strip() or "0")
             if paid < total:
@@ -469,33 +510,24 @@ class CashierView(ctk.CTkFrame):
                 return
         except:
             messagebox.showwarning("Validation Error", "Please enter a valid amount in Cash Received.")
+            self.paid_entry.focus()
             return
 
-        from database import create_transaction
-        from printer_service import PrinterService
-        from ui.custom_dialogs import InvoiceDialog
-        
         try:
             tid = create_transaction(self.user['id'], self.cart, subtotal, discount_amt, total)
-            
-            # Generate receipt
             change_due = paid - total
             receipt_text = PrinterService.generate_receipt_text(
                 self.user['name'], self.cart, subtotal, discount_amt, total, paid, change_due
             )
-            
-            # Save to disk (Audit log)
             PrinterService.print_to_file(receipt_text, tid)
-            
-            # Show receipt dialog
             InvoiceDialog(self, receipt_text)
             
-            # Clear for next customer
+            # Reset view
             self.cart = []
             self.applied_discount = None
             self.promo_entry.delete(0, 'end')
             self.paid_entry.delete(0, 'end')
             self.update_cart_display()
+            self.barcode_entry.focus()
         except Exception as e:
-            messagebox.showerror("Export Error", f"Failed to save transaction: {e}")
-
+            messagebox.showerror("Error", f"Failed to complete transaction: {e}")
