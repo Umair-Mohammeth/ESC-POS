@@ -7,14 +7,12 @@ DB_NAME = "pos_system.db"
 def get_db_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Enable foreign keys
-    cursor.execute("PRAGMA foreign_keys = ON")
     
     # Users Table
     cursor.execute('''
@@ -155,6 +153,16 @@ def get_product_by_barcode(barcode):
         return dict(product)
     return None
 
+def get_product_by_id(product_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+    product = cursor.fetchone()
+    conn.close()
+    if product:
+        return dict(product)
+    return None
+
 def search_products(query):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -180,9 +188,12 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
     """
     import json
     conn = get_db_connection()
-    cursor = conn.cursor()
     
     try:
+        # Use IMMEDIATE transaction to prevent race conditions during stock deduction
+        conn.execute("BEGIN IMMEDIATE")
+        cursor = conn.cursor()
+
         # Deduct stock
         for item in items:
             if item.get('id', 0) > 0:
