@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from auth import verify_pin
+from database import log_user_action
 from tkinter import messagebox
 from styles import (
     THEME_COLORS, RADIUS, SPACING, FONTS, ICONS,
@@ -157,11 +158,11 @@ class LoginView(ctk.CTkFrame):
                 self.pin_input.insert('end', char)
 
     def verify_login(self):
-        pin = self.pin_input.get()
+        pin = self.pin_input.get().strip()
         if not pin:
             return
             
-        if len(pin) != 4:
+        if len(pin) != 4 or not pin.isdigit():
             messagebox.showwarning("Validation Error", "PIN must be exactly 4 digits.")
             return
 
@@ -171,7 +172,6 @@ class LoginView(ctk.CTkFrame):
             # Success feedback
             self.pin_input.configure(border_color=THEME_COLORS["success"])
             # Log login action
-            from database import log_user_action
             log_user_action(user['id'], "LOGIN")
             
             self.master.after(200, lambda: self.on_login_success(user))

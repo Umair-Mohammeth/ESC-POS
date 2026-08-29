@@ -200,6 +200,9 @@ class StockerView(ctk.CTkFrame):
         qty = dialog.get_result()
         
         if qty:
-            update_product_stock(pid, qty)
-            messagebox.showinfo("Success", f"Added {qty} units to {name}!")
-            self.load_products()
+            try:
+                update_product_stock(pid, qty)
+                messagebox.showinfo("Success", f"Added {qty} units to {name}!")
+                self.load_products()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to update stock: {str(e)}")

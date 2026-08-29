@@ -142,9 +142,10 @@ class ProductBaseDialog(ModernDialog):
 
     def submit(self):
         if not self.validate(): return
+        barcode_val = self.barcode_entry.get().strip()
         self.result = {
             'name': self.name_entry.get().strip(),
-            'barcode': self.barcode_entry.get().strip(),
+            'barcode': barcode_val if barcode_val else None,
             'category': self.category_entry.get().strip() or "General",
             'price': float(self.price_entry.get().strip()),
             'stock': int(self.stock_entry.get().strip())
@@ -249,9 +250,10 @@ class UserBaseDialog(ModernDialog):
 
     def submit(self):
         if not self.validate(): return
+        uname_val = self.username_entry.get().strip()
         self.result = {
             'name': self.name_entry.get().strip(),
-            'username': self.username_entry.get().strip(),
+            'username': uname_val if uname_val else None,
             'pin': self.pin_entry.get().strip(),
             'role': self.role_var.get()
         }

@@ -1,5 +1,10 @@
 import customtkinter as ctk
-from database import get_product_by_barcode, search_products, create_transaction
+from database import (
+    get_product_by_barcode, search_products, create_transaction,
+    get_product_by_id, get_discount
+)
+from printer_service import PrinterService
+from ui.custom_dialogs import BrowseProductsDialog, ManualEntryDialog, InvoiceDialog
 from tkinter import messagebox
 from styles import (
     THEME_COLORS, RADIUS, SPACING, FONTS, ICONS,
@@ -323,7 +328,6 @@ class CashierView(ctk.CTkFrame):
         if not code:
             return
             
-        from database import get_discount
         discount = get_discount(code)
         
         if not discount:
@@ -341,7 +345,6 @@ class CashierView(ctk.CTkFrame):
 
     def browse_products(self):
         """Show a quick inventory browser dialog"""
-        from ui.custom_dialogs import BrowseProductsDialog
         dialog = BrowseProductsDialog(self)
         product = dialog.get_result()
         if product:
@@ -349,21 +352,27 @@ class CashierView(ctk.CTkFrame):
 
     def manual_entry(self):
         """Show manual entry dialog"""
-        from ui.custom_dialogs import ManualEntryDialog
         dialog = ManualEntryDialog(self)
         product = dialog.get_result()
         if product:
             self.add_to_cart(product)
 
     def on_shortcut_press(self, event):
-        # Trigger payment if cart is not empty and not typing in entry fields
-        focused = str(self.focus_get())
+        # Trigger payment if cart is not empty and focus is within CashierView and not in entry fields/dialogs
+        focused_widget = self.focus_get()
+        if not focused_widget:
+            return
+
+        focused = str(focused_widget)
         entry_widgets = [
             str(self.barcode_entry),
             str(self.qty_multiply),
             str(self.promo_entry),
             str(self.paid_entry)
         ]
+
+        if not focused.startswith(str(self)):
+            return
 
         if self.cart and focused not in entry_widgets:
             self.process_payment()
@@ -374,10 +383,14 @@ class CashierView(ctk.CTkFrame):
 
     def add_to_cart(self, product):
         # Re-fetch product to ensure latest stock data
-        from database import get_product_by_id
         if product['id'] > 0:
             latest_p = get_product_by_id(product['id'])
             if latest_p: product = latest_p
+        try:
+            multiplier = int(self.qty_multiply.get().strip() or "1")
+            if multiplier <= 0: multiplier = 1
+        except Exception:
+            multiplier = 1
 
         # Get multiplier
         try:
@@ -472,13 +485,17 @@ class CashierView(ctk.CTkFrame):
         self.cart_title.configure(text=f"{ICONS['cart']} Current Order ({total_items} Items)")
         self.count_label.configure(text=f"{total_items} Items Selected")
 
-        # Calculation
+        # Calculation & Discount Re-verification
         discount_amt = 0
         if self.applied_discount:
-            if self.applied_discount['type'] == 'percentage':
-                discount_amt = subtotal * (self.applied_discount['value'] / 100)
+            if subtotal < self.applied_discount.get('min_amount', 0):
+                self.applied_discount = None
+                self.promo_entry.delete(0, 'end')
             else:
-                discount_amt = self.applied_discount['value']
+                if self.applied_discount['type'] == 'percentage':
+                    discount_amt = subtotal * (self.applied_discount['value'] / 100)
+                else:
+                    discount_amt = self.applied_discount['value']
 
         total = max(0, subtotal - discount_amt)
         
@@ -489,7 +506,14 @@ class CashierView(ctk.CTkFrame):
 
     def remove_item(self, index):
         del self.cart[index]
-        if not self.cart: self.applied_discount = None
+        if not self.cart:
+            self.applied_discount = None
+        elif self.applied_discount:
+            new_subtotal = sum(item['subtotal'] for item in self.cart)
+            if new_subtotal < self.applied_discount.get('min_amount', 0):
+                messagebox.showinfo("Discount Removed", f"Discount {self.applied_discount['code']} removed because order subtotal fell below ${self.applied_discount['min_amount']:.2f}")
+                self.applied_discount = None
+                self.promo_entry.delete(0, 'end')
         self.update_cart_display()
 
     def clear_cart(self):
@@ -525,10 +549,6 @@ class CashierView(ctk.CTkFrame):
             messagebox.showwarning("Validation Error", "Please enter a valid amount in Cash Received.")
             return
 
-        from database import create_transaction
-        from printer_service import PrinterService
-        from ui.custom_dialogs import InvoiceDialog
-        
         try:
             tid = create_transaction(self.user['id'], self.cart, subtotal, discount_amt, total)
             

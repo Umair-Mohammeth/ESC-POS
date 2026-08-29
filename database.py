@@ -75,12 +75,12 @@ def init_db():
     ''')
     
     # Migration: Add discount columns if not exist
-    try:
-        cursor.execute("SELECT discount_amount FROM transactions LIMIT 1")
-    except sqlite3.OperationalError:
+    cursor.execute("PRAGMA table_info(transactions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "subtotal" not in columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN subtotal REAL DEFAULT 0")
+    if "discount_amount" not in columns:
         cursor.execute("ALTER TABLE transactions ADD COLUMN discount_amount REAL DEFAULT 0")
-        print("Updated transactions table with discount columns.")
 
     # Seed default discounts
     cursor.execute("SELECT count(*) FROM discounts")
@@ -174,9 +174,11 @@ def search_products(query):
     return [dict(row) for row in products]
 
 def get_discount(code):
+    if not code or not isinstance(code, str):
+        return None
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM discounts WHERE code = ? AND is_active = 1", (code.upper(),))
+    cursor.execute("SELECT * FROM discounts WHERE code = ? AND is_active = 1", (code.upper().strip(),))
     discount = cursor.fetchone()
     conn.close()
     return dict(discount) if discount else None
@@ -213,8 +215,9 @@ def create_transaction(cashier_id, items, subtotal, discount_amount, total_amoun
             VALUES (?, ?, ?, ?, ?)
         ''', (subtotal, discount_amount, total_amount, cashier_id, items_json))
         
+        tid = cursor.lastrowid
         conn.commit()
-        return cursor.lastrowid
+        return tid
     except Exception as e:
         conn.rollback()
         raise e
@@ -285,6 +288,7 @@ def get_user_logs():
 
 # Admin Helpers - Products
 def add_product(name, barcode, category, price, stock):
+    barcode = barcode.strip() if barcode and str(barcode).strip() else None
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO products (name, barcode, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)", 
@@ -293,6 +297,7 @@ def add_product(name, barcode, category, price, stock):
     conn.close()
 
 def update_product(id, name, barcode, category, price, stock):
+    barcode = barcode.strip() if barcode and str(barcode).strip() else None
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE products SET name=?, barcode=?, category=?, price=?, stock_quantity=? WHERE id=?", 
@@ -317,6 +322,7 @@ def get_users():
     return [dict(row) for row in users]
 
 def add_user(name, username, pin, role):
+    username = username.strip() if username and str(username).strip() else None
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, username, pin, role))
@@ -324,6 +330,7 @@ def add_user(name, username, pin, role):
     conn.close()
 
 def update_user(id, name, username, pin, role):
+    username = username.strip() if username and str(username).strip() else None
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, username, pin, role, id))
