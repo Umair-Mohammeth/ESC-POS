@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from database import log_user_action
 from ui.login_view import LoginView
 from ui.cashier_view import CashierView
 from ui.stocker_view import StockerView
@@ -75,9 +76,8 @@ class MainWindow(ctk.CTk):
         if self.current_user:
             # Log logout action
             try:
-                from database import log_user_action
                 log_user_action(self.current_user['id'], "LOGOUT")
-            except:
+            except Exception:
                 pass
                 
         if "app" in self.frames:

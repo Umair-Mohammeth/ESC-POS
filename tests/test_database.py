@@ -89,5 +89,32 @@ class TestDatabase(unittest.TestCase):
             database.create_transaction(1, items, p['price'], 0, p['price'])
         self.assertIn("Insufficient stock", str(cm.exception))
 
+    def test_empty_barcode_and_username_normalization(self):
+        # Adding products with empty strings for barcode should store None (NULL in DB)
+        database.add_product("Item 1", "", "General", 5.0, 10)
+        database.add_product("Item 2", "  ", "General", 8.0, 15)
+
+        prods = database.search_products("Item")
+        for p in prods:
+            self.assertIsNone(p['barcode'])
+
+        # Adding users with empty strings for username should store None
+        database.add_user("User 1", "", "8888", "cashier")
+        database.add_user("User 2", "   ", "9999", "stocker")
+
+        users = database.get_users()
+        user1 = next(u for u in users if u['name'] == "User 1")
+        user2 = next(u for u in users if u['name'] == "User 2")
+        self.assertIsNone(user1['username'])
+        self.assertIsNone(user2['username'])
+
+    def test_get_discount_edge_cases(self):
+        self.assertIsNone(database.get_discount(None))
+        self.assertIsNone(database.get_discount(""))
+        self.assertIsNone(database.get_discount(123))
+        discount = database.get_discount(" save10 ")
+        self.assertIsNotNone(discount)
+        self.assertEqual(discount['code'], "SAVE10")
+
 if __name__ == '__main__':
     unittest.main()
