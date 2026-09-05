@@ -151,9 +151,10 @@ class ManagerView(ctk.CTkFrame):
                 mid_row = ctk.CTkFrame(content, fg_color="transparent")
                 mid_row.pack(fill="x", pady=(8, 0))
                 
+                cashier_name = t['cashier_name'] or "Unknown"
                 ctk.CTkLabel(
                     mid_row,
-                    text=f"By {t['cashier_name']} • {t['date']}",
+                    text=f"By {cashier_name} • {t['date']}",
                     font=(FONTS["primary"], 13),
                     text_color=THEME_COLORS["text_secondary"]
                 ).pack(side="left")

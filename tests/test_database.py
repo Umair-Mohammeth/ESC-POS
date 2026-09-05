@@ -89,5 +89,30 @@ class TestDatabase(unittest.TestCase):
             database.create_transaction(1, items, p['price'], 0, p['price'])
         self.assertIn("Insufficient stock", str(cm.exception))
 
+    def test_empty_barcode_and_username_normalization(self):
+        # Multiple products with empty string barcodes should not trigger UNIQUE constraint failure
+        database.add_product("Prod 1", "", "General", 10.0, 5)
+        database.add_product("Prod 2", "   ", "General", 15.0, 5)
+
+        products = database.get_all_products()
+        p1 = [p for p in products if p['name'] == "Prod 1"][0]
+        p2 = [p for p in products if p['name'] == "Prod 2"][0]
+        self.assertIsNone(p1['barcode'])
+        self.assertIsNone(p2['barcode'])
+
+        # Multiple users with empty usernames should also normalize to NULL
+        database.add_user("User 1", "", "8888", "cashier")
+        database.add_user("User 2", "   ", "9999", "cashier")
+        users = database.get_users()
+        u1 = [u for u in users if u['name'] == "User 1"][0]
+        u2 = [u for u in users if u['name'] == "User 2"][0]
+        self.assertIsNone(u1['username'])
+        self.assertIsNone(u2['username'])
+
+    def test_get_product_by_barcode_with_empty_input(self):
+        self.assertIsNone(database.get_product_by_barcode(""))
+        self.assertIsNone(database.get_product_by_barcode("   "))
+        self.assertIsNone(database.get_product_by_barcode(None))
+
 if __name__ == '__main__':
     unittest.main()
