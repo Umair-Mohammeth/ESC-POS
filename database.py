@@ -144,9 +144,11 @@ def init_db():
     conn.close()
 
 def get_product_by_barcode(barcode):
+    if not barcode or not str(barcode).strip():
+        return None
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM products WHERE barcode = ?", (barcode,))
+    cursor.execute("SELECT * FROM products WHERE barcode = ?", (str(barcode).strip(),))
     product = cursor.fetchone()
     conn.close()
     if product:
@@ -174,9 +176,11 @@ def search_products(query):
     return [dict(row) for row in products]
 
 def get_discount(code):
+    if not code or not str(code).strip():
+        return None
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM discounts WHERE code = ? AND is_active = 1", (code.upper(),))
+    cursor.execute("SELECT * FROM discounts WHERE code = ? AND is_active = 1", (str(code).strip().upper(),))
     discount = cursor.fetchone()
     conn.close()
     return dict(discount) if discount else None
@@ -253,7 +257,7 @@ def get_daily_sales():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT date(date) as day, sum(total_amount) as total 
+        SELECT date(date) as day, COALESCE(sum(total_amount), 0) as total
         FROM transactions 
         GROUP BY day 
         ORDER BY day DESC LIMIT 7
@@ -285,18 +289,20 @@ def get_user_logs():
 
 # Admin Helpers - Products
 def add_product(name, barcode, category, price, stock):
+    clean_barcode = barcode.strip() if barcode and barcode.strip() else None
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO products (name, barcode, category, price, stock_quantity) VALUES (?, ?, ?, ?, ?)", 
-                   (name, barcode, category, price, stock))
+                   (name, clean_barcode, category, price, stock))
     conn.commit()
     conn.close()
 
 def update_product(id, name, barcode, category, price, stock):
+    clean_barcode = barcode.strip() if barcode and barcode.strip() else None
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE products SET name=?, barcode=?, category=?, price=?, stock_quantity=? WHERE id=?", 
-                   (name, barcode, category, price, stock, id))
+                   (name, clean_barcode, category, price, stock, id))
     conn.commit()
     conn.close()
 
@@ -317,16 +323,18 @@ def get_users():
     return [dict(row) for row in users]
 
 def add_user(name, username, pin, role):
+    clean_username = username.strip() if username and username.strip() else None
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, username, pin, role))
+    cursor.execute("INSERT INTO users (name, username, pin, role) VALUES (?, ?, ?, ?)", (name, clean_username, pin, role))
     conn.commit()
     conn.close()
 
 def update_user(id, name, username, pin, role):
+    clean_username = username.strip() if username and username.strip() else None
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, username, pin, role, id))
+    cursor.execute("UPDATE users SET name=?, username=?, pin=?, role=? WHERE id=?", (name, clean_username, pin, role, id))
     conn.commit()
     conn.close()
 

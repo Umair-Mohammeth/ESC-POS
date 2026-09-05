@@ -403,15 +403,18 @@ class AdminView(ctk.CTkFrame):
         result = dialog.get_result()
         
         if result:
-            db.add_product(
-                result['name'],
-                result['barcode'],
-                result.get('category', 'General'),
-                result['price'],
-                result['stock']
-            )
-            messagebox.showinfo("Success", f"Product '{result['name']}' added successfully!")
-            self.load_products()
+            try:
+                db.add_product(
+                    result['name'],
+                    result['barcode'],
+                    result.get('category', 'General'),
+                    result['price'],
+                    result['stock']
+                )
+                messagebox.showinfo("Success", f"Product '{result['name']}' added successfully!")
+                self.load_products()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not add product. Barcode might already exist.\n\nError: {str(e)}")
 
     def edit_product_dialog(self, p):
         """Show modern edit product dialog"""
@@ -419,16 +422,19 @@ class AdminView(ctk.CTkFrame):
         result = dialog.get_result()
         
         if result:
-            db.update_product(
-                p['id'],
-                result['name'],
-                result['barcode'],
-                result.get('category', 'General'),
-                result['price'],
-                result['stock']
-            )
-            messagebox.showinfo("Success", "Product updated successfully!")
-            self.load_products()
+            try:
+                db.update_product(
+                    p['id'],
+                    result['name'],
+                    result['barcode'],
+                    result.get('category', 'General'),
+                    result['price'],
+                    result['stock']
+                )
+                messagebox.showinfo("Success", "Product updated successfully!")
+                self.load_products()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not update product. Barcode might already exist.\n\nError: {str(e)}")
 
     def del_prod(self, pid):
         if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this product?"):
@@ -469,7 +475,17 @@ class AdminView(ctk.CTkFrame):
                 messagebox.showerror("Error", f"Could not update user.\n\nError: {str(e)}")
 
     def del_user(self, uid):
+        if uid == 1:
+            messagebox.showwarning("Action Prohibited", "The primary admin account (ID 1) cannot be deleted.")
+            return
+        if self.user and self.user.get('id') == uid:
+            messagebox.showwarning("Action Prohibited", "You cannot delete your own logged-in account.")
+            return
+
         if messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this user?"):
-            db.delete_user(uid)
-            messagebox.showinfo("Success", "User deleted successfully!")
-            self.load_users()
+            try:
+                db.delete_user(uid)
+                messagebox.showinfo("Success", "User deleted successfully!")
+                self.load_users()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not delete user.\n\nError: {str(e)}")

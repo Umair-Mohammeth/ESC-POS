@@ -489,7 +489,15 @@ class CashierView(ctk.CTkFrame):
 
     def remove_item(self, index):
         del self.cart[index]
-        if not self.cart: self.applied_discount = None
+        if not self.cart:
+            self.applied_discount = None
+        else:
+            subtotal = sum(i['subtotal'] for i in self.cart)
+            if self.applied_discount and subtotal < self.applied_discount.get('min_amount', 0):
+                code = self.applied_discount.get('code', '')
+                min_amt = self.applied_discount.get('min_amount', 0)
+                self.applied_discount = None
+                messagebox.showinfo("Discount Removed", f"Discount code '{code}' removed because subtotal fell below ${min_amt:.2f}.")
         self.update_cart_display()
 
     def clear_cart(self):
